@@ -37,6 +37,44 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
     }
   };
 
+  const renderCustomDot = (props: any) => {
+    const { cx, cy, payload } = props;
+    
+    // Check if this point is within any anomaly
+    const anomaly = anomalies.find(a => payload.depth >= a.startDepth && payload.depth <= a.endDepth);
+
+    if (anomaly) {
+      const isCritical = anomaly.severity === 'CRITICAL';
+      const color = isCritical ? '#ef4444' : '#f97316';
+      return (
+        <g key={`dot-${payload.depth}`}>
+          {/* Pinging ring */}
+          <circle 
+            cx={cx} 
+            cy={cy} 
+            r={isCritical ? 8 : 6} 
+            fill="none"
+            stroke={color} 
+            strokeWidth={2} 
+            className={isCritical ? 'animate-ping duration-1000' : 'animate-pulse duration-1000'}
+            style={{ transformOrigin: `${cx}px ${cy}px` }}
+          />
+          {/* Static center dot */}
+          <circle 
+            cx={cx} 
+            cy={cy} 
+            r={4} 
+            fill={color} 
+            stroke="#ffffff" 
+            strokeWidth={1.5} 
+          />
+        </g>
+      );
+    }
+    
+    return null;
+  };
+
   return (
     <div className="flex-1 min-h-0 bg-slate-950/80 rounded-xl border border-emerald-500/10 p-4 relative group overflow-hidden flex flex-col shadow-inner">
       <div className="absolute top-4 left-4 z-20 flex flex-col space-y-2">
@@ -166,7 +204,7 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
                 dataKey="baseGR" 
                 name="BASE_LOG" 
                 stroke="#10b981" 
-                dot={false} 
+                dot={renderCustomDot} 
                 strokeWidth={2} 
                 isAnimationActive={false}
                 activeDot={{ r: 6, fill: '#10b981', stroke: '#ffffff', strokeWidth: 2 }}
@@ -179,7 +217,7 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
                 dataKey="ghostGR" 
                 name={ghostLabel} 
                 stroke="#FF5F1F" 
-                dot={false} 
+                dot={renderCustomDot} 
                 strokeWidth={2} 
                 strokeDasharray="5 3" 
                 isAnimationActive={false}
@@ -195,7 +233,7 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
                     dataKey={sig.id} 
                     name={sig.name}
                     stroke={sig.color} 
-                    dot={false} 
+                    dot={renderCustomDot} 
                     strokeWidth={1.5} 
                     isAnimationActive={false}
                     activeDot={{ r: 5, fill: sig.color, stroke: '#ffffff', strokeWidth: 1.5 }}

@@ -170,7 +170,7 @@ const NDRCrawler: React.FC = () => {
               data-testid="datum-shift-filter"
             >
               <ShieldAlert size={14} className={showGhostOnly ? 'animate-pulse' : ''} />
-              <span>Datum shift filter (GHOST_SCAN)</span>
+              <span>Display only projects with datum shift issues</span>
             </button>
             <button 
               onClick={fetchProjects}

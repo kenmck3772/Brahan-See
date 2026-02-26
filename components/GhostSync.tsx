@@ -9,6 +9,7 @@ import {
   Link, Info
 } from 'lucide-react';
 import { MOCK_BASE_LOG, MOCK_GHOST_LOG } from '../constants';
+import { TraumaEvent } from '../types';
 import SyncMonitorChart from './SyncMonitorChart';
 
 export interface SignalMetadata {
@@ -46,6 +47,7 @@ const GhostSync: React.FC = () => {
   // Anomaly Detection State
   const [anomalyThreshold, setAnomalyThreshold] = useState(25);
   const [isScanningAnomalies, setIsScanningAnomalies] = useState(false);
+  const [scanProgress, setScanProgress] = useState(0);
   const [detectedAnomalies, setDetectedAnomalies] = useState<SyncAnomaly[]>([]);
 
   const [signals, setSignals] = useState<SignalMetadata[]>([
@@ -144,33 +146,70 @@ const GhostSync: React.FC = () => {
   const runAnomalyScan = useCallback(() => {
     setIsScanningAnomalies(true);
     setDetectedAnomalies([]);
-    setTimeout(() => {
-      const anomalies: SyncAnomaly[] = [];
-      let currentAnomaly: { start: number, sum: number, count: number } | null = null;
+    setScanProgress(0);
 
-      combinedData.forEach((row, idx) => {
-        if (row.ghostGR !== null && row.diff > anomalyThreshold) {
-          if (!currentAnomaly) {
-            currentAnomaly = { start: row.depth, sum: row.diff, count: 1 };
-          } else {
-            currentAnomaly.sum += row.diff;
-            currentAnomaly.count += 1;
+    let progress = 0;
+    const interval = setInterval(() => {
+      progress += 10;
+      setScanProgress(progress);
+      
+      if (progress >= 100) {
+        clearInterval(interval);
+        
+        const anomalies: SyncAnomaly[] = [];
+        let currentAnomaly: { start: number, sum: number, count: number } | null = null;
+
+        combinedData.forEach((row, idx) => {
+          if (row.ghostGR !== null && row.diff > anomalyThreshold) {
+            if (!currentAnomaly) {
+              currentAnomaly = { start: row.depth, sum: row.diff, count: 1 };
+            } else {
+              currentAnomaly.sum += row.diff;
+              currentAnomaly.count += 1;
+            }
+          } else if (currentAnomaly) {
+            const avgDiff = currentAnomaly.sum / currentAnomaly.count;
+            anomalies.push({
+              id: `ANOM-${Math.random().toString(36).substring(7).toUpperCase()}`,
+              startDepth: currentAnomaly.start,
+              endDepth: combinedData[idx - 1].depth,
+              avgDiff,
+              severity: avgDiff > anomalyThreshold * 1.5 ? 'CRITICAL' : 'WARNING'
+            });
+            currentAnomaly = null;
           }
-        } else if (currentAnomaly) {
-          const avgDiff = currentAnomaly.sum / currentAnomaly.count;
-          anomalies.push({
-            id: `ANOM-${Math.random().toString(36).substring(7).toUpperCase()}`,
-            startDepth: currentAnomaly.start,
-            endDepth: combinedData[idx - 1].depth,
-            avgDiff,
-            severity: avgDiff > anomalyThreshold * 1.5 ? 'CRITICAL' : 'WARNING'
-          });
-          currentAnomaly = null;
+        });
+        setDetectedAnomalies(anomalies);
+        setIsScanningAnomalies(false);
+        setTimeout(() => setScanProgress(0), 500); // Clear progress after a short delay
+
+        // Log detected anomalies to the black box
+        if (anomalies.length > 0) {
+          try {
+            const existingLogsStr = localStorage.getItem('BRAHAN_BLACK_BOX_LOGS');
+            const existingLogs: TraumaEvent[] = existingLogsStr ? JSON.parse(existingLogsStr) : [];
+            
+            const newEvents: TraumaEvent[] = anomalies.map(anomaly => ({
+              timestamp: new Date().toISOString(),
+              layer: 'GHOST_SYNC',
+              depth: Math.round((anomaly.startDepth + anomaly.endDepth) / 2), // Center of anomaly
+              value: Number(anomaly.avgDiff.toFixed(2)),
+              unit: 'API',
+              severity: anomaly.severity,
+              description: `GhostSync discrepancy detected between ${anomaly.startDepth}m and ${anomaly.endDepth}m. Trace ID: ${anomaly.id}`
+            }));
+
+            const updatedLogs = [...newEvents, ...existingLogs].slice(0, 100);
+            localStorage.setItem('BRAHAN_BLACK_BOX_LOGS', JSON.stringify(updatedLogs));
+            
+            // Dispatch a custom event so TraumaNode can update its logs if it's mounted
+            window.dispatchEvent(new Event('storage'));
+          } catch (e) {
+            console.error("Failed to log GhostSync anomalies to black box", e);
+          }
         }
-      });
-      setDetectedAnomalies(anomalies);
-      setIsScanningAnomalies(false);
-    }, 1200);
+      }
+    }, 120);
   }, [combinedData, anomalyThreshold]);
 
   const handleFetchSubmit = (e: React.FormEvent) => {
@@ -238,10 +277,18 @@ const GhostSync: React.FC = () => {
           <button 
             onClick={runAnomalyScan}
             disabled={isScanningAnomalies || isSyncing}
-            className={`flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border ${isScanningAnomalies ? 'bg-orange-500/20 border-orange-500 text-orange-500' : 'bg-slate-900 border-orange-900/40 text-orange-400 hover:border-orange-400'}`}
+            className={`relative overflow-hidden flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border ${isScanningAnomalies ? 'bg-orange-500/20 border-orange-500 text-orange-500' : 'bg-slate-900 border-orange-900/40 text-orange-400 hover:border-orange-400'}`}
           >
-            {isScanningAnomalies ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-            <span>Forensic_Scan</span>
+            {isScanningAnomalies && (
+              <div 
+                className="absolute left-0 top-0 bottom-0 bg-orange-500/20 transition-all duration-100"
+                style={{ width: `${scanProgress}%` }}
+              />
+            )}
+            <div className="relative z-10 flex items-center space-x-2">
+              {isScanningAnomalies ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+              <span>{isScanningAnomalies ? `Scanning... ${scanProgress}%` : 'Forensic_Scan'}</span>
+            </div>
           </button>
 
           <button 

@@ -27,6 +27,16 @@ const MissionControl: React.FC<MissionControlProps> = ({ onSelectTarget, isAnaly
     }
   };
 
+  const getProgress = (directive?: string) => {
+    if (!directive) return 0;
+    // Deterministic percentage based on the directive string
+    let hash = 0;
+    for (let i = 0; i < directive.length; i++) {
+      hash = directive.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return Math.abs(hash) % 101;
+  };
+
   return (
     <div className="flex flex-col h-full bg-transparent relative overflow-hidden py-4">
       <div className="absolute inset-0 opacity-10 mix-blend-luminosity pointer-events-none flex items-center justify-center z-0">
@@ -90,6 +100,20 @@ const MissionControl: React.FC<MissionControlProps> = ({ onSelectTarget, isAnaly
                       <span key={block} className="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-[9px] font-mono text-slate-400">{block}</span>
                     ))}
                  </div>
+                 {target.DIRECTIVE && (
+                   <div className="pt-2 space-y-1.5">
+                     <div className="flex justify-between items-center text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                       <span className="truncate pr-2" title={target.DIRECTIVE}>{target.DIRECTIVE}</span>
+                       <span className="text-emerald-500">{getProgress(target.DIRECTIVE)}%</span>
+                     </div>
+                     <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                       <div 
+                         className="h-full bg-emerald-500 transition-all duration-1000 ease-out"
+                         style={{ width: `${getProgress(target.DIRECTIVE)}%` }}
+                       />
+                     </div>
+                   </div>
+                 )}
               </div>
             </div>
 

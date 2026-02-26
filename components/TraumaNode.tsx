@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useRef, useState } from 'react';
+import React, { useMemo, useEffect, useRef, useState, useCallback } from 'react';
 import Plotly from 'plotly.js-dist-min';
 import { MOCK_TRAUMA_DATA } from '../constants';
 import { TraumaLayer, TraumaEvent, TraumaData } from '../types';
@@ -139,6 +139,79 @@ const TraumaNode: React.FC<TraumaNodeProps> = ({ isFocused = false, onToggleFocu
     setTimeout(() => setIsGlitching(false), 300);
   };
 
+  const triggerFlashAtDepth = useCallback((depth: number, log?: TraumaEvent) => {
+    // Reset previous targeting state before new one
+    setIsTargeting(false); 
+    setFlashDepth(null);
+    setScanSweepDepth(null);
+
+    setHighlightedDepth(depth);
+    if (log) {
+      setSelectedLog(log);
+    } else {
+      // If clicked on 3D model, try to find a relevant log, or just set a mock one
+      const foundLog = blackBoxLogs.find(l => l.depth === depth);
+      if (foundLog) {
+        setSelectedLog(foundLog);
+      } else {
+        // Create a temporary log for the HUD
+        setSelectedLog({
+          timestamp: new Date().toISOString(),
+          layer: activeLayer,
+          depth: depth,
+          value: 0, // We don't have the exact value easily here without looking it up
+          unit: layerToUnit[activeLayer],
+          severity: 'INFO',
+          description: `Manual inspection at ${depth}m.`
+        });
+      }
+    }
+    
+    setFlashDepth(depth); // Trigger the pulse
+    setIsTargeting(true); // Show HUD
+    setIsGlitching(true); // Small glitch effect on chart
+    setUiRevision(Date.now().toString()); // Force Plotly to update camera if needed
+
+    // Localized Cylinder Pulse animation
+    setPulseScale(2.8);
+    setTimeout(() => setPulseScale(1.0), 300);
+    setTimeout(() => setPulseScale(1.5), 600);
+    setTimeout(() => setPulseScale(1.0), 900);
+    setTimeout(() => setIsGlitching(false), 500); // Clear glitch
+
+    // Dynamic Sweep Animation
+    const startDepth = scanSweepDepth || allDepths[0]; // Start from current sweep or top
+    const duration = 1400;
+    const startTime = performance.now();
+    
+    const animateSweep = (time: number) => {
+      const elapsed = time - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const easedProgress = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      const currentSweep = startDepth + (depth - startDepth) * easedProgress;
+      setScanSweepDepth(currentSweep);
+      
+      if (progress < 1) requestAnimationFrame(animateSweep);
+      else setTimeout(() => setScanSweepDepth(null), 1200); // Clear sweep line
+    };
+    requestAnimationFrame(animateSweep);
+
+    // Camera Autopilot zoom to Target
+    if (plotContainerRef.current && !isCrossSectionView) {
+      const zRange = allDepths[allDepths.length-1] - allDepths[0];
+      const normalizedZ = (depth - allDepths[0]) / zRange;
+      const cameraCenterZ = normalizedZ * 2 - 1; // Normalize depth to Plotly's -1 to 1 range for camera.center.z
+
+      Plotly.relayout(plotContainerRef.current, {
+        'scene.camera.center': { x: 0, y: 0, z: cameraCenterZ },
+        'scene.camera.eye': { x: 1.5, y: 1.5, z: cameraCenterZ + 0.7 } // Move eye to look at center + slightly above
+      });
+    }
+
+    // Clear flash after a certain period
+    setTimeout(() => setFlashDepth(null), 2500);
+  }, [blackBoxLogs, activeLayer, scanSweepDepth, allDepths, isCrossSectionView]);
+
   const runForensicScan = () => {
     setIsScanning(true);
     setBlackBoxLogs([]); // Clear logs before a new scan
@@ -177,6 +250,14 @@ const TraumaNode: React.FC<TraumaNodeProps> = ({ isFocused = false, onToggleFocu
       setBlackBoxLogs(updated);
       localStorage.setItem('BRAHAN_BLACK_BOX_LOGS', JSON.stringify(updated));
       setIsScanning(false);
+      
+      if (newEvents.length > 0) {
+        // Sort to find the most critical or just take the first one
+        const topEvent = newEvents.sort((a, b) => b.value - a.value)[0];
+        setTimeout(() => {
+          triggerFlashAtDepth(topEvent.depth, topEvent);
+        }, 300);
+      }
     }, 1200);
   };
 
@@ -462,21 +543,30 @@ const TraumaNode: React.FC<TraumaNodeProps> = ({ isFocused = false, onToggleFocu
       responsive: true, 
       displayModeBar: false,
       displaylogo: false
+    }).then(() => {
+      const plotEl = plotContainerRef.current as any;
+      if (plotEl) {
+        plotEl.removeAllListeners('plotly_click');
+        plotEl.on('plotly_click', (data: any) => {
+          if (data && data.points && data.points.length > 0) {
+            const point = data.points[0];
+            const depth = isCrossSectionView ? highlightedDepth : point.z;
+            if (depth !== undefined && depth !== null) {
+               triggerFlashAtDepth(depth);
+            }
+          }
+        });
+      }
     });
 
     return () => {
       if (plotContainerRef.current) Plotly.purge(plotContainerRef.current);
     };
-  }, [allDepths, fingerIds, activeLayer, highlightedDepth, flashDepth, scanSweepDepth, pulseScale, uiRevision, isCrossSectionView, layerOpacities]);
+  }, [allDepths, fingerIds, activeLayer, highlightedDepth, flashDepth, scanSweepDepth, pulseScale, uiRevision, isCrossSectionView, layerOpacities, triggerFlashAtDepth]);
 
   // Fix: The `handleLogClick` function was referenced before it was defined in the `React.createElement` scope.
   // Ensured it's properly defined within the component scope.
   const handleLogClick = (e: React.MouseEvent, log: TraumaEvent) => {
-    // Reset previous targeting state before new one
-    setIsTargeting(false); 
-    setFlashDepth(null);
-    setScanSweepDepth(null);
-
     // Click pulse effect on the log entry itself
     const rect = e.currentTarget.getBoundingClientRect();
     setPingCoord({ 
@@ -488,52 +578,7 @@ const TraumaNode: React.FC<TraumaNodeProps> = ({ isFocused = false, onToggleFocu
     // Clear the ping effect after a short duration
     setTimeout(() => setPingCoord(null), 1000);
 
-    const depth = log.depth;
-    setHighlightedDepth(depth);
-    setSelectedLog(log);
-    setFlashDepth(depth); // Trigger the pulse
-    setIsTargeting(true); // Show HUD
-    setIsGlitching(true); // Small glitch effect on chart
-    setUiRevision(Date.now().toString()); // Force Plotly to update camera if needed
-
-    // Localized Cylinder Pulse animation
-    setPulseScale(2.8);
-    setTimeout(() => setPulseScale(1.0), 300);
-    setTimeout(() => setPulseScale(1.5), 600);
-    setTimeout(() => setPulseScale(1.0), 900);
-    setTimeout(() => setIsGlitching(false), 500); // Clear glitch
-
-    // Dynamic Sweep Animation
-    const startDepth = scanSweepDepth || allDepths[0]; // Start from current sweep or top
-    const duration = 1400;
-    const startTime = performance.now();
-    
-    const animateSweep = (time: number) => {
-      const elapsed = time - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const easedProgress = 1 - Math.pow(1 - progress, 3); // ease-out cubic
-      const currentSweep = startDepth + (depth - startDepth) * easedProgress;
-      setScanSweepDepth(currentSweep);
-      
-      if (progress < 1) requestAnimationFrame(animateSweep);
-      else setTimeout(() => setScanSweepDepth(null), 1200); // Clear sweep line
-    };
-    requestAnimationFrame(animateSweep);
-
-    // Camera Autopilot zoom to Target
-    if (plotContainerRef.current && !isCrossSectionView) {
-      const zRange = allDepths[allDepths.length-1] - allDepths[0];
-      const normalizedZ = (depth - allDepths[0]) / zRange;
-      const cameraCenterZ = normalizedZ * 2 - 1; // Normalize depth to Plotly's -1 to 1 range for camera.center.z
-
-      Plotly.relayout(plotContainerRef.current, {
-        'scene.camera.center': { x: 0, y: 0, z: cameraCenterZ },
-        'scene.camera.eye': { x: 1.5, y: 1.5, z: cameraCenterZ + 0.7 } // Move eye to look at center + slightly above
-      });
-    }
-
-    // Clear flash after a certain period
-    setTimeout(() => setFlashDepth(null), 2500);
+    triggerFlashAtDepth(log.depth, log);
   };
 
   return (

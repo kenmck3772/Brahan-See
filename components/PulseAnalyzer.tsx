@@ -16,6 +16,7 @@ const PulseAnalyzer: React.FC = () => {
   const [scavengeProgress, setScavengeProgress] = useState(0);
   const [isScavenging, setIsScavenging] = useState(false);
   const [showHistoricalOverlay, setShowHistoricalOverlay] = useState(false);
+  const [showHistoricalEvents, setShowHistoricalEvents] = useState(false);
 
   const rechargePhaseData = MOCK_PRESSURE_DATA.slice(0, 4);
   const pressures = rechargePhaseData.map(d => d.pressure);
@@ -50,6 +51,13 @@ const PulseAnalyzer: React.FC = () => {
       default: return <Info size={14} className="text-slate-500" />;
     }
   };
+
+  // Map historical events to timestamps for overlay
+  const eventTimestamps = ['04:00', '08:00', '12:00', '16:00', '20:00'];
+  const mappedEvents = MOCK_HISTORICAL_BARRIER_LOGS.map((event, index) => ({
+    ...event,
+    timestamp: eventTimestamps[index % eventTimestamps.length]
+  }));
 
   return (
     <div className="flex flex-col h-full bg-slate-950/40 backdrop-blur-md relative overflow-hidden border border-emerald-900/10">
@@ -108,6 +116,15 @@ const PulseAnalyzer: React.FC = () => {
                     Overlay_10YR_Ghost
                   </button>
                 )}
+                {view === 'LIVE' && (
+                  <button 
+                    onClick={() => setShowHistoricalEvents(!showHistoricalEvents)}
+                    className={`flex items-center space-x-2 px-3 py-1.5 rounded border text-[9px] font-black uppercase transition-all ${showHistoricalEvents ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'bg-slate-900 border-cyan-900/30 text-cyan-400 hover:border-cyan-400'}`}
+                  >
+                    <Activity size={12} className={showHistoricalEvents ? 'animate-pulse' : ''} />
+                    <span>Overlay_Historical_Events</span>
+                  </button>
+                )}
              </div>
 
              <ResponsiveContainer width="100%" height="100%">
@@ -150,6 +167,25 @@ const PulseAnalyzer: React.FC = () => {
                     dot={{ r: 4, fill: '#020617', stroke: view === 'LIVE' ? analysis.color : '#a855f7', strokeWidth: 2 }}
                   />
                   <ReferenceLine y={800} stroke="#FF5F1F" strokeDasharray="5 5" label={{ value: 'CRITICAL BLEED', position: 'insideRight', fill: '#FF5F1F', fontSize: 8, fontWeight: 'bold' }} />
+                  
+                  {/* Historical Events Overlay */}
+                  {view === 'LIVE' && showHistoricalEvents && mappedEvents.map((event) => (
+                    <ReferenceLine 
+                      key={event.id}
+                      x={event.timestamp} 
+                      stroke={event.severity === 'CRITICAL' ? '#ef4444' : '#06b6d4'} 
+                      strokeDasharray="3 3"
+                      label={{ 
+                        value: `${event.type} (${event.date})`, 
+                        position: 'insideTopLeft', 
+                        fill: event.severity === 'CRITICAL' ? '#ef4444' : '#06b6d4', 
+                        fontSize: 8, 
+                        fontWeight: 'bold',
+                        angle: -90,
+                        offset: 10
+                      }} 
+                    />
+                  ))}
                </ComposedChart>
              </ResponsiveContainer>
           </div>

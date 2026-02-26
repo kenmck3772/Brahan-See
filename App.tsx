@@ -62,7 +62,7 @@ const App: React.FC = () => {
     { id: 'ndrModernization', label: 'NDR Modernization', icon: <Database size={16} />, desc: 'Forensic Modernization' },
     { id: 'cerberusSimulator', label: 'Cerberus Simulator', icon: <ShieldCheck size={16} />, desc: 'Tri-Head Survival Engine' },
     { id: 'weteForensicScanner', label: 'WETE Scanner', icon: <Scale size={16} />, desc: 'Fact Science Reconciliation' },
-    { id: 'ndrCrawler', label: 'NDR Crawler', icon: <Search size={16} />, desc: 'NDR Metadata Search' },
+    { id: 'ndrCrawler', label: 'Local Data Importer', icon: <Search size={16} />, desc: 'Import .LAS / .CSV Files' },
     { id: 'forensicDeltaMap', label: 'Forensic Delta Map', icon: <MapIcon size={16} />, desc: 'Public vs Forensic Truth' },
     { id: 'timeTravelSlider', label: 'Time-Travel Slider', icon: <Activity size={16} />, desc: 'Temporal State Manager' },
   ];
