@@ -16,6 +16,8 @@ interface SyncMonitorChartProps {
   offset: number;
   anomalies?: SyncAnomaly[];
   onToggleSignal: (dataKey: string) => void;
+  onAnomalyClick?: (anomaly: SyncAnomaly) => void;
+  selectedAnomalyId?: string | null;
 }
 
 const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({ 
@@ -26,7 +28,9 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
   validationError,
   offset,
   anomalies = [],
-  onToggleSignal
+  onToggleSignal,
+  onAnomalyClick,
+  selectedAnomalyId
 }) => {
   const [activeDepth, setActiveDepth] = useState<number | null>(null);
   const [activePayload, setActivePayload] = useState<any>(null);
@@ -170,18 +174,70 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
             )}
 
             {/* Anomaly Highlight Areas */}
-            {anomalies.map(anomaly => (
-              <ReferenceArea
-                key={anomaly.id}
-                x1={anomaly.startDepth}
-                x2={anomaly.endDepth}
-                fill={anomaly.severity === 'CRITICAL' ? '#ef4444' : '#f97316'}
-                fillOpacity={0.15}
-                stroke={anomaly.severity === 'CRITICAL' ? '#ef4444' : '#f97316'}
-                strokeOpacity={0.3}
-                strokeWidth={1}
-              />
-            ))}
+            {anomalies.map(anomaly => {
+              const isSelected = selectedAnomalyId === anomaly.id;
+              const isCritical = anomaly.severity === 'CRITICAL';
+              const color = isCritical ? '#ef4444' : '#f97316';
+              const labelText = isCritical ? 'CRITICAL' : 'WARNING';
+              const labelWidth = isCritical ? 60 : 56;
+              
+              return (
+                <ReferenceArea
+                  key={anomaly.id}
+                  x1={anomaly.startDepth}
+                  x2={anomaly.endDepth}
+                  fill={color}
+                  fillOpacity={isSelected ? 0.3 : 0.15}
+                  stroke={color}
+                  strokeOpacity={isSelected ? 0.8 : 0.3}
+                  strokeWidth={isSelected ? 2 : 1}
+                  onClick={() => onAnomalyClick && onAnomalyClick(anomaly)}
+                  style={{ cursor: 'pointer' }}
+                  label={({ viewBox }) => {
+                    if (!viewBox) return null;
+                    const { x, y, width } = viewBox;
+                    const centerX = x + width / 2;
+                    const topY = y + 20;
+                    
+                    return (
+                      <g className="pointer-events-none">
+                        {/* Background Pill */}
+                        <rect 
+                          x={centerX - labelWidth / 2 - 10} 
+                          y={topY - 14} 
+                          width={labelWidth + 20} 
+                          height="18" 
+                          rx="9" 
+                          fill={color} 
+                          fillOpacity={0.9} 
+                          stroke="#ffffff" 
+                          strokeWidth="1.5" 
+                          className="filter drop-shadow-md"
+                        />
+                        {/* Icon/Symbol */}
+                        {isCritical ? (
+                          <circle cx={centerX - labelWidth / 2 + 2} cy={topY - 5} r="4" fill="#ffffff" />
+                        ) : (
+                          <path d={`M${centerX - labelWidth / 2 - 2},${topY - 1} l4,-8 l4,8 z`} fill="#ffffff" />
+                        )}
+                        {/* Text */}
+                        <text 
+                          x={centerX + 4} 
+                          y={topY - 2} 
+                          fill="#ffffff" 
+                          fontSize="8" 
+                          fontWeight="black" 
+                          textAnchor="middle"
+                          className="uppercase tracking-widest"
+                        >
+                          {labelText}
+                        </text>
+                      </g>
+                    );
+                  }}
+                />
+              );
+            })}
 
             {/* Forensic Crosshair - Vertical (Current Depth) */}
             {activeDepth !== null && (

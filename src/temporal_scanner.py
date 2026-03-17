@@ -17,7 +17,7 @@ class TemporalScanner:
 
         # Sort tuples by timestamp
         # (Assuming timestamp is in ISO format string)
-        sorted_history = sorted(history_tuples, key=lambda x: x.timestamp)
+        sorted_history = sorted(history_tuples, key=lambda x: getattr(x, 'timestamp', ''))
         
         # Calculate time deltas
         events = []
@@ -28,19 +28,23 @@ class TemporalScanner:
             
             try:
                 # Try to parse ISO format timestamps
-                t1 = datetime.fromisoformat(str(prev.timestamp).replace('Z', '+00:00'))
-                t2 = datetime.fromisoformat(str(curr.timestamp).replace('Z', '+00:00'))
+                t1 = datetime.fromisoformat(str(getattr(prev, 'timestamp', '')).replace('Z', '+00:00'))
+                t2 = datetime.fromisoformat(str(getattr(curr, 'timestamp', '')).replace('Z', '+00:00'))
                 delta_days = (t2 - t1).total_seconds() / 86400.0
-                deltas.append(delta_days)
+                if delta_days >= 0:
+                    deltas.append(delta_days)
             except (ValueError, AttributeError):
                 # Fallback if timestamps are not valid ISO strings
                 pass
             
             events.append({
-                "from": prev.timestamp,
-                "to": curr.timestamp,
-                "change": f"{prev.value} -> {curr.value}"
+                "from": getattr(prev, 'timestamp', ''),
+                "to": getattr(curr, 'timestamp', ''),
+                "change": f"{getattr(prev, 'value', 'N/A')} -> {getattr(curr, 'value', 'N/A')}"
             })
+            
+        if len(deltas) < 1:
+            return {"trend": "INSUFFICIENT_DATA", "degradation_rate": 0.0, "details": events}
             
         trend = "RECURRING"
         degradation_rate = 0.0
@@ -48,15 +52,21 @@ class TemporalScanner:
         if len(deltas) >= 2:
             # Check if the time between events is decreasing (accelerating degradation)
             mid = len(deltas) // 2
-            first_half_avg = sum(deltas[:mid]) / max(1, len(deltas[:mid]))
-            second_half_avg = sum(deltas[mid:]) / max(1, len(deltas[mid:]))
+            first_half = deltas[:mid]
+            second_half = deltas[mid:]
             
-            if second_half_avg < first_half_avg and second_half_avg > 0:
+            first_half_avg = sum(first_half) / len(first_half) if first_half else 0
+            second_half_avg = sum(second_half) / len(second_half) if second_half else 0
+            
+            if second_half_avg < first_half_avg:
                 trend = "ACCELERATING_DEGRADATION"
                 # Rate of acceleration
-                degradation_rate = (first_half_avg - second_half_avg) / first_half_avg
+                if first_half_avg > 0:
+                    degradation_rate = (first_half_avg - second_half_avg) / first_half_avg
             elif second_half_avg > first_half_avg:
                 trend = "STABILIZING"
+                if second_half_avg > 0:
+                    degradation_rate = (first_half_avg - second_half_avg) / second_half_avg
         
         return {
             "trend": trend,

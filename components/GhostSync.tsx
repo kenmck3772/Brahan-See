@@ -6,7 +6,7 @@ import {
   AlertTriangle, Activity, ScanLine, Target, 
   Globe2, Send, ShieldAlert, AlertOctagon, Search,
   Eye, Filter, Lock, Unlock, ShieldX, ShieldCheck,
-  Link, Info
+  Link, Info, X, Calendar
 } from 'lucide-react';
 import { MOCK_BASE_LOG, MOCK_GHOST_LOG } from '../constants';
 import { TraumaEvent } from '../types';
@@ -25,6 +25,8 @@ export interface SyncAnomaly {
   endDepth: number;
   avgDiff: number;
   severity: 'CRITICAL' | 'WARNING';
+  detectedAt: string;
+  description: string;
 }
 
 const OFFSET_SAFE_LIMIT = 20;
@@ -49,6 +51,9 @@ const GhostSync: React.FC = () => {
   const [isScanningAnomalies, setIsScanningAnomalies] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [detectedAnomalies, setDetectedAnomalies] = useState<SyncAnomaly[]>([]);
+  const [selectedAnomaly, setSelectedAnomaly] = useState<SyncAnomaly | null>(null);
+  const [severityFilter, setSeverityFilter] = useState<'ALL' | 'CRITICAL' | 'WARNING'>('ALL');
+  const [dateFilter, setDateFilter] = useState<'ALL' | 'LAST_7_DAYS' | 'LAST_30_DAYS'>('ALL');
 
   const [signals, setSignals] = useState<SignalMetadata[]>([
     { id: 'SIG-001', name: 'BASE_LOG', color: '#10b981', visible: true },
@@ -56,6 +61,21 @@ const GhostSync: React.FC = () => {
   ]);
 
   const [remoteLogs, setRemoteLogs] = useState<Record<string, Record<number, number>>>({});
+
+  const filteredAnomalies = useMemo(() => {
+    return detectedAnomalies.filter(a => {
+      if (severityFilter !== 'ALL' && a.severity !== severityFilter) return false;
+      if (dateFilter !== 'ALL') {
+        const anomalyDate = new Date(a.detectedAt);
+        const now = new Date();
+        const diffTime = Math.abs(now.getTime() - anomalyDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+        if (dateFilter === 'LAST_7_DAYS' && diffDays > 7) return false;
+        if (dateFilter === 'LAST_30_DAYS' && diffDays > 30) return false;
+      }
+      return true;
+    });
+  }, [detectedAnomalies, severityFilter, dateFilter]);
 
   const combinedData = useMemo(() => {
     return MOCK_BASE_LOG.map((base) => {
@@ -146,39 +166,77 @@ const GhostSync: React.FC = () => {
   const runAnomalyScan = useCallback(() => {
     setIsScanningAnomalies(true);
     setDetectedAnomalies([]);
+    setSelectedAnomaly(null);
     setScanProgress(0);
 
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += 10;
-      setScanProgress(progress);
-      
-      if (progress >= 100) {
-        clearInterval(interval);
-        
-        const anomalies: SyncAnomaly[] = [];
-        let currentAnomaly: { start: number, sum: number, count: number } | null = null;
+    const totalRows = combinedData.length;
+    if (totalRows === 0) {
+      setIsScanningAnomalies(false);
+      return;
+    }
 
-        combinedData.forEach((row, idx) => {
-          if (row.ghostGR !== null && row.diff > anomalyThreshold) {
-            if (!currentAnomaly) {
-              currentAnomaly = { start: row.depth, sum: row.diff, count: 1 };
-            } else {
-              currentAnomaly.sum += row.diff;
-              currentAnomaly.count += 1;
-            }
-          } else if (currentAnomaly) {
-            const avgDiff = currentAnomaly.sum / currentAnomaly.count;
-            anomalies.push({
-              id: `ANOM-${Math.random().toString(36).substring(7).toUpperCase()}`,
-              startDepth: currentAnomaly.start,
-              endDepth: combinedData[idx - 1].depth,
-              avgDiff,
-              severity: avgDiff > anomalyThreshold * 1.5 ? 'CRITICAL' : 'WARNING'
-            });
-            currentAnomaly = null;
+    const anomalies: SyncAnomaly[] = [];
+    let currentAnomaly: { start: number, sum: number, count: number } | null = null;
+    let currentIndex = 0;
+    const chunkSize = Math.max(1, Math.floor(totalRows / 25)); // Process in 25 chunks
+
+    const processChunk = () => {
+      const end = Math.min(currentIndex + chunkSize, totalRows);
+      
+      for (let i = currentIndex; i < end; i++) {
+        const row = combinedData[i];
+        if (row.ghostGR !== null && row.diff > anomalyThreshold) {
+          if (!currentAnomaly) {
+            currentAnomaly = { start: row.depth, sum: row.diff, count: 1 };
+          } else {
+            currentAnomaly.sum += row.diff;
+            currentAnomaly.count += 1;
           }
-        });
+        } else if (currentAnomaly) {
+          const avgDiff = currentAnomaly.sum / currentAnomaly.count;
+          const severity = avgDiff > anomalyThreshold * 1.5 ? 'CRITICAL' : 'WARNING';
+          const randomDaysAgo = Math.floor(Math.random() * 30);
+          const date = new Date();
+          date.setDate(date.getDate() - randomDaysAgo);
+          anomalies.push({
+            id: `ANOM-${Math.random().toString(36).substring(7).toUpperCase()}`,
+            startDepth: currentAnomaly.start,
+            endDepth: combinedData[i - 1].depth,
+            avgDiff,
+            severity,
+            detectedAt: date.toISOString().split('T')[0],
+            description: severity === 'CRITICAL' ? 'Severe deviation detected between base and ghost logs. Possible structural anomaly or data corruption.' : 'Moderate deviation detected. Requires manual review.'
+          });
+          currentAnomaly = null;
+        }
+      }
+
+      currentIndex = end;
+      const progress = Math.floor((currentIndex / totalRows) * 100);
+      setScanProgress(progress);
+
+      if (currentIndex < totalRows) {
+        // Continue processing in the next frame to yield to the UI
+        setTimeout(processChunk, 40);
+      } else {
+        // Finalize
+        if (currentAnomaly) {
+          const avgDiff = currentAnomaly.sum / currentAnomaly.count;
+          const severity = avgDiff > anomalyThreshold * 1.5 ? 'CRITICAL' : 'WARNING';
+          const randomDaysAgo = Math.floor(Math.random() * 30);
+          const date = new Date();
+          date.setDate(date.getDate() - randomDaysAgo);
+          anomalies.push({
+            id: `ANOM-${Math.random().toString(36).substring(7).toUpperCase()}`,
+            startDepth: currentAnomaly.start,
+            endDepth: combinedData[totalRows - 1].depth,
+            avgDiff,
+            severity,
+            detectedAt: date.toISOString().split('T')[0],
+            description: severity === 'CRITICAL' ? 'Severe deviation detected between base and ghost logs. Possible structural anomaly or data corruption.' : 'Moderate deviation detected. Requires manual review.'
+          });
+        }
+        
         setDetectedAnomalies(anomalies);
         setIsScanningAnomalies(false);
         setTimeout(() => setScanProgress(0), 500); // Clear progress after a short delay
@@ -189,15 +247,33 @@ const GhostSync: React.FC = () => {
             const existingLogsStr = localStorage.getItem('BRAHAN_BLACK_BOX_LOGS');
             const existingLogs: TraumaEvent[] = existingLogsStr ? JSON.parse(existingLogsStr) : [];
             
-            const newEvents: TraumaEvent[] = anomalies.map(anomaly => ({
-              timestamp: new Date().toISOString(),
-              layer: 'GHOST_SYNC',
-              depth: Math.round((anomaly.startDepth + anomaly.endDepth) / 2), // Center of anomaly
-              value: Number(anomaly.avgDiff.toFixed(2)),
-              unit: 'API',
-              severity: anomaly.severity,
-              description: `GhostSync discrepancy detected between ${anomaly.startDepth}m and ${anomaly.endDepth}m. Trace ID: ${anomaly.id}`
-            }));
+            const newEvents: TraumaEvent[] = [];
+            
+            anomalies.forEach(anomaly => {
+              // Standard GhostSync log
+              newEvents.push({
+                timestamp: new Date().toISOString(),
+                layer: 'GHOST_SYNC',
+                depth: Math.round((anomaly.startDepth + anomaly.endDepth) / 2), // Center of anomaly
+                value: Number(anomaly.avgDiff.toFixed(2)),
+                unit: 'API',
+                severity: anomaly.severity,
+                description: `GhostSync discrepancy detected between ${anomaly.startDepth}m and ${anomaly.endDepth}m. Trace ID: ${anomaly.id}`
+              });
+
+              // Potential Casing Trauma Log
+              if (anomaly.severity === 'WARNING' || anomaly.severity === 'CRITICAL') {
+                newEvents.push({
+                  timestamp: new Date().toISOString(),
+                  layer: 'CASING_TRAUMA',
+                  depth: Math.round((anomaly.startDepth + anomaly.endDepth) / 2),
+                  value: Number(anomaly.avgDiff.toFixed(2)),
+                  unit: 'API',
+                  severity: anomaly.severity,
+                  description: `Potential casing trauma detected due to severe datum shift anomaly between ${anomaly.startDepth}m and ${anomaly.endDepth}m. Delta: ${anomaly.avgDiff.toFixed(2)} API. Trace ID: ${anomaly.id}`
+                });
+              }
+            });
 
             const updatedLogs = [...newEvents, ...existingLogs].slice(0, 100);
             localStorage.setItem('BRAHAN_BLACK_BOX_LOGS', JSON.stringify(updatedLogs));
@@ -209,7 +285,10 @@ const GhostSync: React.FC = () => {
           }
         }
       }
-    }, 120);
+    };
+
+    // Start processing
+    processChunk();
   }, [combinedData, anomalyThreshold]);
 
   const handleFetchSubmit = (e: React.FormEvent) => {
@@ -350,8 +429,10 @@ const GhostSync: React.FC = () => {
           ghostLabel={ghostLabel} 
           validationError={validationError}
           offset={offset}
-          anomalies={detectedAnomalies}
+          anomalies={filteredAnomalies}
           onToggleSignal={handleToggleSignal}
+          onAnomalyClick={setSelectedAnomaly}
+          selectedAnomalyId={selectedAnomaly?.id}
         />
 
         <div className="w-full xl:w-80 flex flex-col space-y-4">
@@ -444,7 +525,41 @@ const GhostSync: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex-1 glass-panel p-5 rounded-lg border border-emerald-900/30 bg-slate-900/60 overflow-y-auto custom-scrollbar shadow-xl">
+          {selectedAnomaly && (
+            <div className={`glass-panel p-5 rounded-lg border bg-slate-900/60 flex flex-col space-y-3 shadow-xl animate-in slide-in-from-right-4 ${selectedAnomaly.severity === 'CRITICAL' ? 'border-red-500/50' : 'border-orange-500/50'}`}>
+              <div className="flex items-center justify-between border-b border-slate-700 pb-2">
+                <h3 className={`text-[10px] font-black uppercase tracking-widest ${selectedAnomaly.severity === 'CRITICAL' ? 'text-red-400' : 'text-orange-400'}`}>
+                  Anomaly_Details
+                </h3>
+                <button onClick={() => setSelectedAnomaly(null)} className="text-slate-400 hover:text-white transition-colors">
+                  <X size={12} />
+                </button>
+              </div>
+              <div className="space-y-2 text-[10px] font-terminal">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">ID:</span>
+                  <span className="text-slate-200">{selectedAnomaly.id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Severity:</span>
+                  <span className={selectedAnomaly.severity === 'CRITICAL' ? 'text-red-400 font-black' : 'text-orange-400 font-black'}>{selectedAnomaly.severity}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Range:</span>
+                  <span className="text-slate-200">{selectedAnomaly.startDepth.toFixed(1)}m - {selectedAnomaly.endDepth.toFixed(1)}m</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Avg Delta:</span>
+                  <span className="text-slate-200">{selectedAnomaly.avgDiff.toFixed(2)} API</span>
+                </div>
+                <div className="mt-2 pt-2 border-t border-slate-800 text-slate-300 leading-relaxed">
+                  {selectedAnomaly.description}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex-none glass-panel p-5 rounded-lg border border-emerald-900/30 bg-slate-900/60 shadow-xl">
             <h3 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-4 flex items-center">
                <ScanLine size={12} className="mr-2" /> Signal_Stack
             </h3>
@@ -464,6 +579,60 @@ const GhostSync: React.FC = () => {
                   {sig.visible ? <CheckCircle2 size={12} className="text-emerald-500" /> : <ShieldAlert size={12} className="text-red-900" />}
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div className="flex-1 glass-panel p-5 rounded-lg border border-emerald-900/30 bg-slate-900/60 flex flex-col overflow-hidden shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center">
+                 <AlertTriangle size={12} className="mr-2" /> Detected_Anomalies
+              </h3>
+            </div>
+            
+            <div className="flex space-x-2 mb-3">
+              <select 
+                value={severityFilter} 
+                onChange={(e) => setSeverityFilter(e.target.value as any)}
+                className="flex-1 bg-slate-950 border border-emerald-900/50 text-[9px] font-black text-emerald-400 rounded px-2 py-1.5 outline-none cursor-pointer"
+              >
+                <option value="ALL">ALL SEVERITY</option>
+                <option value="CRITICAL">CRITICAL</option>
+                <option value="WARNING">WARNING</option>
+              </select>
+              <select 
+                value={dateFilter} 
+                onChange={(e) => setDateFilter(e.target.value as any)}
+                className="flex-1 bg-slate-950 border border-emerald-900/50 text-[9px] font-black text-emerald-400 rounded px-2 py-1.5 outline-none cursor-pointer"
+              >
+                <option value="ALL">ALL DATES</option>
+                <option value="LAST_7_DAYS">LAST 7 DAYS</option>
+                <option value="LAST_30_DAYS">LAST 30 DAYS</option>
+              </select>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1">
+              {filteredAnomalies.length === 0 ? (
+                <div className="text-[10px] text-slate-500 font-terminal text-center py-4">NO ANOMALIES FOUND</div>
+              ) : (
+                filteredAnomalies.map(anomaly => (
+                  <div 
+                    key={anomaly.id}
+                    onClick={() => setSelectedAnomaly(anomaly)}
+                    className={`p-3 rounded border cursor-pointer transition-all hover:bg-slate-800/50 ${selectedAnomaly?.id === anomaly.id ? 'border-emerald-500 bg-slate-800/80 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'border-emerald-900/30 bg-slate-950/50'}`}
+                  >
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-[10px] font-black text-emerald-100">{anomaly.id}</span>
+                      <span className={`text-[8px] font-black px-1.5 py-0.5 rounded ${anomaly.severity === 'CRITICAL' ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'}`}>
+                        {anomaly.severity}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-[9px] font-terminal text-slate-400">
+                      <span>{anomaly.startDepth.toFixed(1)}m - {anomaly.endDepth.toFixed(1)}m</span>
+                      <span className="flex items-center"><Calendar size={8} className="mr-1"/> {anomaly.detectedAt}</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 

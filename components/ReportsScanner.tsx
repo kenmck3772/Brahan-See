@@ -389,11 +389,28 @@ const ReportsScanner: React.FC = () => {
                         y={yStart} 
                         width="24" 
                         height={height} 
-                        fill={item.status === 'DISCREPANT' ? '#ef444444' : (isHovered ? 'rgba(16, 185, 129, 0.4)' : 'rgba(16, 185, 129, 0.08)')}
-                        stroke={item.status === 'DISCREPANT' ? '#ef4444' : (isHovered ? '#ffffff' : '#10b98144')}
+                        fill={isHovered ? (item.status === 'DISCREPANT' ? '#ef444488' : 'rgba(16, 185, 129, 0.6)') : (item.status === 'DISCREPANT' ? '#ef444444' : 'rgba(16, 185, 129, 0.08)')}
+                        stroke={isHovered ? '#ffffff' : (item.status === 'DISCREPANT' ? '#ef4444' : '#10b98144')}
                         strokeWidth={isHovered ? 2 : 1}
-                        className={`transition-all duration-300 ${isHovered ? 'filter drop-shadow-[0_0_12px_rgba(16,185,129,0.8)]' : ''}`}
+                        className={`transition-all duration-300 ${isHovered ? (item.status === 'DISCREPANT' ? 'filter drop-shadow-[0_0_12px_rgba(239,68,68,0.8)]' : 'filter drop-shadow-[0_0_12px_rgba(16,185,129,0.8)]') : ''}`}
                       />
+                      
+                      {/* Always visible joint ID and cumulative length */}
+                      {!isHovered && (
+                        <text 
+                          x="100" 
+                          y={yStart + height/2 + 2} 
+                          fill={item.status === 'DISCREPANT' ? '#ef4444' : '#10b981'} 
+                          fontSize="6" 
+                          fontWeight="bold"
+                          opacity={item.status === 'DISCREPANT' ? "0.9" : "0.4"} 
+                          textAnchor="end"
+                          className="pointer-events-none"
+                        >
+                          {item.id} | {item.cumulative_m.toFixed(1)}m
+                        </text>
+                      )}
+
                       {isHovered && (
                         <g className="animate-in fade-in slide-in-from-left-2 duration-300">
                           <line x1="80" y1={yStart + height/2} x2="108" y2={yStart + height/2} stroke="#ffffff" strokeWidth="1.5" strokeDasharray="3 2" />

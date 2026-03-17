@@ -669,7 +669,7 @@ const TraumaNode: React.FC<TraumaNodeProps> = ({ isFocused = false, onToggleFocu
               React.createElement("h2", { className: "text-3xl font-black text-emerald-400 font-terminal uppercase tracking-tighter" }, "Trauma_Node_Forensics"),
               React.createElement("div", { className: "flex items-center space-x-3" },
                 React.createElement(Binary, { size: 14, className: "text-emerald-800" }),
-                React.createElement("span", { className: "text-[10px] text-emerald-800 uppercase tracking-widest font-black" }, "Cylindrical Voxel Autopsy Array"),
+                React.createElement("span", { className: "text-[10px] text-emerald-800 uppercase tracking-widest font-black" }, isCrossSectionView ? "Radial Inspector" : "Cylinder Voxel Autopsy Array"),
                 React.createElement("div", { className: "w-1 h-1 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_#10b981]" })
               )
             )
@@ -680,7 +680,7 @@ const TraumaNode: React.FC<TraumaNodeProps> = ({ isFocused = false, onToggleFocu
               className: `flex items-center space-x-2 px-5 py-2.5 rounded-lg font-black text-[11px] uppercase tracking-widest transition-all ${isCrossSectionView ? 'bg-orange-500 text-slate-950 shadow-[0_0_25px_rgba(249,115,22,0.5)]' : 'bg-slate-900 border border-emerald-900/50 text-emerald-400 hover:border-emerald-400'}`
             },
               React.createElement(Layers, { size: 16 }),
-              React.createElement("span", null, isCrossSectionView ? '3D Cylinder' : 'Radial_Map')
+              React.createElement("span", null, isCrossSectionView ? 'Cylinder Voxel Autopsy Array' : 'Radial Inspector')
             ),
             React.createElement("button", { 
               onClick: runForensicScan,
