@@ -379,7 +379,7 @@ const ReportsScanner: React.FC = () => {
                   return (
                     <g 
                       key={item.id} 
-                      ref={el => jointRefs.current[item.id] = el}
+                      ref={el => { jointRefs.current[item.id] = el; }}
                       className={`cursor-pointer transition-all duration-300 ${!matchesFilter ? 'opacity-20' : 'opacity-100'}`}
                       onMouseEnter={() => setHoveredJoint(item.id)}
                       onMouseLeave={() => setHoveredJoint(null)}

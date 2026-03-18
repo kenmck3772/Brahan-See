@@ -20,6 +20,7 @@ export interface TraumaData {
 }
 
 export interface TraumaEvent {
+  id: string;
   timestamp: string;
   layer: string;
   depth: number;
@@ -155,4 +156,19 @@ export interface NDRForensicResult {
     integrityStatus: string;
   };
   sha512: string;
+}
+
+export interface ForensicWell {
+  id: string;
+  reportedLat: number;
+  reportedLon: number;
+  actualLat: number;
+  actualLon: number;
+  reportedProd: number;
+  auditedProd: number;
+  status: 'conflict' | 'nominal' | 'critical';
+  field: string;
+  deviationAudit: string;
+  lastAudit: string;
+  forensicNote: string;
 }

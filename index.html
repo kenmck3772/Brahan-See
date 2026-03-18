@@ -71,29 +71,50 @@
       left: 0;
       width: 100vw;
       height: 100vh;
-      pointer-events: none; /* Allows clicks/interactions with elements below */
-      z-index: 9999; /* Ensure it's on top */
-      opacity: 0.1; /* Subtle overall opacity */
-      
-      /* Horizontal scanlines & very subtle RGB glow */
-      background: 
-        linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), /* Horizontal dark lines */
-        linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02)); /* Vertical RGB tint */
-      background-size: 100% 1px, 2px 100%; /* Fine horizontal lines, thin vertical RGB */
-      
-      animation: 
-        crt-scanlines 1s steps(60) infinite, /* Subtle vertical scanline movement */
-        crt-flicker 0.1s infinite alternate; /* Very fast, subtle opacity flicker */
+      pointer-events: none;
+      z-index: 9999;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%),
+                  linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+      background-size: 100% 2px, 3px 100%;
+      opacity: 0.15;
+      animation: crt-flicker 0.1s infinite alternate;
+      will-change: opacity;
     }
 
-    @keyframes crt-scanlines {
-      from { background-position: 0 0, 0 0; }
-      to { background-position: 0 100%, 0 0; }
+    #crt-overlay::before {
+      content: " ";
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      right: 0;
+      background: radial-gradient(circle, rgba(18, 16, 16, 0) 40%, rgba(0, 0, 0, 0.4) 100%);
+      z-index: 10000;
+      pointer-events: none;
+    }
+
+    #crt-overlay::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(rgba(18, 16, 16, 0) 0%, rgba(34, 197, 94, 0.03) 50%, rgba(18, 16, 16, 0) 100%);
+      background-size: 100% 20%;
+      animation: scanline-move 8s linear infinite;
+      will-change: transform;
+    }
+
+    @keyframes scanline-move {
+      0% { transform: translate3d(0, -100%, 0); }
+      100% { transform: translate3d(0, 100%, 0); }
     }
 
     @keyframes crt-flicker {
-      0% { opacity: 0.09; }
-      100% { opacity: 0.11; }
+      0% { opacity: 0.14; }
+      100% { opacity: 0.16; }
     }
   </style>
 <script type="importmap">

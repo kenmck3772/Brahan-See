@@ -19,10 +19,10 @@ const MissionControl: React.FC<MissionControlProps> = ({ onSelectTarget, isAnaly
 
   const getPriorityStyles = (priority: MissionTarget['PRIORITY']) => {
     switch (priority) {
-      case 'CRITICAL': return 'border-red-500/20 text-red-400 bg-red-500/5';
+      case 'CRITICAL': return 'border-[var(--alert-red)]/20 text-[var(--alert-red)] bg-[var(--alert-red)]/5';
       case 'HIGH': return 'border-orange-500/20 text-orange-400 bg-orange-500/5';
       case 'MEDIUM': return 'border-slate-700 text-slate-400 bg-slate-800/10';
-      case 'LOW': return 'border-emerald-500/20 text-emerald-400 bg-emerald-500/5';
+      case 'LOW': return 'border-[var(--emerald-primary)]/20 text-[var(--emerald-primary)] bg-[var(--emerald-primary)]/5';
       default: return 'border-slate-800 text-slate-500';
     }
   };
@@ -38,22 +38,22 @@ const MissionControl: React.FC<MissionControlProps> = ({ onSelectTarget, isAnaly
   };
 
   return (
-    <div className="flex flex-col h-full bg-transparent relative overflow-hidden py-4">
+    <div className="flex flex-col h-full bg-transparent relative overflow-hidden py-4 scanline-effect glass-panel cyber-border">
       <div className="absolute inset-0 opacity-10 mix-blend-luminosity pointer-events-none flex items-center justify-center z-0">
         <img src="/brahan-seer.jpg" alt="Brahan Seer Background" className="w-full h-full object-cover" onError={(e) => e.currentTarget.style.display = 'none'} />
       </div>
       <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between border-b border-slate-800 pb-8 mb-8 gap-4">
         <div className="flex items-center space-x-5">
-          <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
-            <Radar size={32} className="text-emerald-400" />
+          <div className="p-4 bg-[var(--emerald-primary)]/10 border border-[var(--emerald-primary)]/30 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.1)] glass-panel">
+            <Radar size={32} className="text-[var(--emerald-primary)] text-glow-emerald" />
           </div>
           <div>
-            <h2 className="text-3xl font-bold text-white tracking-tight">
+            <h2 className="text-3xl font-bold text-white tracking-tight text-glow-emerald">
               {GHOST_HUNTER_MISSION.MISSION_ID}
             </h2>
             <div className="flex items-center space-x-3 text-[10px] font-bold uppercase tracking-widest mt-1 text-slate-500">
-              <span className="flex items-center text-emerald-500">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2 animate-pulse"></span>
+              <span className="flex items-center text-[var(--emerald-primary)]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--emerald-primary)] mr-2 animate-pulse shadow-[0_0_8px_var(--emerald-primary)]"></span>
                 Active Scan
               </span>
               <span className="h-2 w-px bg-slate-800"></span>
@@ -62,7 +62,7 @@ const MissionControl: React.FC<MissionControlProps> = ({ onSelectTarget, isAnaly
           </div>
         </div>
         <div className="text-right">
-           <div className="text-sm text-slate-400 font-mono tracking-widest bg-slate-800/50 px-4 py-2 rounded-lg border border-slate-700">
+           <div className="text-sm text-slate-400 font-mono tracking-widest bg-slate-800/50 px-4 py-2 rounded-lg border border-slate-700 glass-panel cyber-border">
              {new Date(GHOST_HUNTER_MISSION.TIMESTAMP).toLocaleDateString()} // {new Date(GHOST_HUNTER_MISSION.TIMESTAMP).toLocaleTimeString()}
            </div>
         </div>
@@ -75,18 +75,18 @@ const MissionControl: React.FC<MissionControlProps> = ({ onSelectTarget, isAnaly
             onMouseEnter={() => setHoveredId(target.ASSET)}
             onMouseLeave={() => setHoveredId(null)}
             onClick={() => onSelectTarget(target)}
-            className={`group p-8 glass-panel rounded-2xl border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between h-80
-              ${hoveredId === target.ASSET ? 'scale-[1.01] border-emerald-500/40 shadow-2xl ring-1 ring-emerald-500/20' : 'border-slate-800'}
+            className={`group p-8 glass-panel rounded-2xl border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between h-80 cyber-border
+              ${hoveredId === target.ASSET ? 'scale-[1.01] border-[var(--emerald-primary)]/40 shadow-2xl ring-1 ring-[var(--emerald-primary)]/20' : 'border-slate-800'}
               ${getPriorityStyles(target.PRIORITY)}`}
           >
             <div className="space-y-4 relative z-10">
               <div className="flex justify-between items-start">
                 <div className="flex flex-col">
                   <span className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-60 mb-2">{target.REGION}</span>
-                  <h3 className="text-2xl font-bold tracking-tight text-white group-hover:text-emerald-400 transition-colors uppercase">{target.ASSET}</h3>
+                  <h3 className="text-2xl font-bold tracking-tight text-white group-hover:text-[var(--emerald-primary)] transition-colors uppercase group-hover:text-glow-emerald">{target.ASSET}</h3>
                 </div>
-                <div className="p-2 bg-white/5 border border-white/5 rounded-md">
-                  <Scan size={16} className="text-slate-400 group-hover:text-emerald-400 transition-colors" />
+                <div className="p-2 bg-white/5 border border-white/5 rounded-md glass-panel">
+                  <Scan size={16} className="text-slate-400 group-hover:text-[var(--emerald-primary)] transition-colors" />
                 </div>
               </div>
 
@@ -97,18 +97,18 @@ const MissionControl: React.FC<MissionControlProps> = ({ onSelectTarget, isAnaly
                  </div>
                  <div className="flex flex-wrap gap-2">
                     {target.BLOCKS.map(block => (
-                      <span key={block} className="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-[9px] font-mono text-slate-400">{block}</span>
+                      <span key={block} className="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-[9px] font-mono text-slate-400 glass-panel">{block}</span>
                     ))}
                  </div>
                  {target.DIRECTIVE && (
                    <div className="pt-2 space-y-1.5">
                      <div className="flex justify-between items-center text-[9px] font-bold uppercase tracking-widest text-slate-400">
                        <span className="truncate pr-2" title={target.DIRECTIVE}>{target.DIRECTIVE}</span>
-                       <span className="text-emerald-500">{getProgress(target.DIRECTIVE)}%</span>
+                       <span className="text-[var(--emerald-primary)]">{getProgress(target.DIRECTIVE)}%</span>
                      </div>
                      <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
                        <div 
-                         className="h-full bg-emerald-500 transition-all duration-1000 ease-out"
+                         className="h-full bg-[var(--emerald-primary)] transition-all duration-1000 ease-out shadow-[0_0_10px_var(--emerald-primary)]"
                          style={{ width: `${getProgress(target.DIRECTIVE)}%` }}
                        />
                      </div>
@@ -123,14 +123,14 @@ const MissionControl: React.FC<MissionControlProps> = ({ onSelectTarget, isAnaly
                     <Database size={12} />
                     <span>Portal: {target.DATA_PORTAL}</span>
                  </div>
-                 {target.WELLS && <span className="text-emerald-500 text-[9px] font-bold uppercase">{target.WELLS.length} Wells Detected</span>}
+                 {target.WELLS && <span className="text-[var(--emerald-primary)] text-[9px] font-bold uppercase text-glow-emerald">{target.WELLS.length} Wells Detected</span>}
               </div>
               
               <div className="flex items-center justify-between">
                  <div className={`px-4 py-1.5 rounded-full text-[9px] font-bold tracking-widest border border-current`}>
                     {target.PRIORITY}
                  </div>
-                 <button className="flex items-center space-x-2 text-[11px] font-bold uppercase tracking-widest text-emerald-400 group-hover:text-white transition-all">
+                 <button className="flex items-center space-x-2 text-[11px] font-bold uppercase tracking-widest text-[var(--emerald-primary)] group-hover:text-white transition-all group-hover:text-glow-emerald">
                     <span>Infiltrate</span>
                     <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
                  </button>
@@ -140,11 +140,11 @@ const MissionControl: React.FC<MissionControlProps> = ({ onSelectTarget, isAnaly
         ))}
       </div>
 
-      <div className="relative z-10 glass-panel p-6 rounded-2xl border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-6">
+      <div className="relative z-10 glass-panel p-6 rounded-2xl border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-6 cyber-border">
          <div className="flex items-center space-x-8">
             <div className="flex items-center space-x-4">
-               <div className="p-3 bg-emerald-500/10 rounded-xl">
-                  <Cpu size={20} className="text-emerald-500" />
+               <div className="p-3 bg-[var(--emerald-primary)]/10 rounded-xl glass-panel">
+                  <Cpu size={20} className="text-[var(--emerald-primary)]" />
                </div>
                <div>
                   <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Logic Hub</div>
@@ -153,8 +153,8 @@ const MissionControl: React.FC<MissionControlProps> = ({ onSelectTarget, isAnaly
             </div>
             <div className="h-8 w-px bg-slate-800 hidden md:block"></div>
             <div className="flex items-center space-x-4">
-               <div className="p-3 bg-emerald-500/10 rounded-xl">
-                  <Compass size={20} className="text-emerald-500" />
+               <div className="p-3 bg-[var(--emerald-primary)]/10 rounded-xl glass-panel">
+                  <Compass size={20} className="text-[var(--emerald-primary)]" />
                </div>
                <div>
                   <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">GPS Uplink</div>

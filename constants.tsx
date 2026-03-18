@@ -1,5 +1,5 @@
 
-import { LogEntry, TraumaData, PressureData, NDRProject, TubingItem, WellReport, BarrierEvent, MissionConfig } from './types';
+import { LogEntry, TraumaData, PressureData, NDRProject, TubingItem, WellReport, BarrierEvent, MissionConfig, ForensicWell } from './types';
 
 // Global Mission Hub Data (WETE Forensic Modernization)
 export const GHOST_HUNTER_MISSION: MissionConfig = {
@@ -174,4 +174,40 @@ export const MOCK_PRESSURE_DATA: PressureData[] = [
   { timestamp: '16:00', pressure: 450 },
   { timestamp: '20:00', pressure: 650 },
   { timestamp: '23:59', pressure: 850 },
+];
+
+export const MOCK_WELLS: ForensicWell[] = [
+  { 
+    id: 'STELLA-001', 
+    reportedLat: 56.500, reportedLon: 1.200, 
+    actualLat: 56.505, actualLon: 1.208, 
+    reportedProd: 10000, auditedProd: 8500, 
+    status: 'conflict',
+    field: 'Stella',
+    deviationAudit: '5.2° Azimuth Drift @ 1200m',
+    lastAudit: '2024-02-15',
+    forensicNote: 'Mass-balance discrepancy suggests unmetered flow or sensor drift in A-Annulus.'
+  },
+  { 
+    id: 'GANNET-A', 
+    reportedLat: 57.100, reportedLon: 0.800, 
+    actualLat: 57.101, actualLon: 0.802, 
+    reportedProd: 15000, auditedProd: 14800, 
+    status: 'nominal',
+    field: 'Gannet',
+    deviationAudit: '0.1° Azimuth Drift (Nominal)',
+    lastAudit: '2024-03-01',
+    forensicNote: 'Data alignment within 2% threshold. No significant forensic discordance.'
+  },
+  { 
+    id: 'VIKING-X', 
+    reportedLat: 53.500, reportedLon: 2.100, 
+    actualLat: 53.515, actualLon: 2.125, 
+    reportedProd: 5000, auditedProd: 3200, 
+    status: 'critical',
+    field: 'Viking',
+    deviationAudit: '12.8° Vertical Deviation @ 850m',
+    lastAudit: '2024-01-20',
+    forensicNote: 'Critical structural autopsy required. Casing integrity compromised by tectonic shift.'
+  },
 ];

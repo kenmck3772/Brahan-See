@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Line, ComposedChart } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Line, ComposedChart, ReferenceArea } from 'recharts';
 import { MOCK_PRESSURE_DATA, MOCK_HISTORICAL_BARRIER_LOGS, MOCK_SCAVENGED_PRESSURE_TESTS } from '../constants';
 import { calculateLinearRegression, diagnoseSawtooth } from '../forensic_logic/math';
 // Added Loader2 to imports from lucide-react
@@ -17,6 +17,7 @@ const PulseAnalyzer: React.FC = () => {
   const [isScavenging, setIsScavenging] = useState(false);
   const [showHistoricalOverlay, setShowHistoricalOverlay] = useState(false);
   const [showHistoricalEvents, setShowHistoricalEvents] = useState(false);
+  const [showLeakThresholds, setShowLeakThresholds] = useState(false);
 
   const rechargePhaseData = MOCK_PRESSURE_DATA.slice(0, 4);
   const pressures = rechargePhaseData.map(d => d.pressure);
@@ -46,8 +47,8 @@ const PulseAnalyzer: React.FC = () => {
     switch (type) {
       case 'TOPUP': return <Droplet size={14} className="text-cyan-400" />;
       case 'SQUEEZE': return <Beaker size={14} className="text-purple-400" />;
-      case 'TEST': return <ShieldCheck size={14} className="text-emerald-400" />;
-      case 'BREACH': return <AlertCircle size={14} className="text-red-500" />;
+      case 'TEST': return <ShieldCheck size={14} className="text-[var(--emerald-primary)]" />;
+      case 'BREACH': return <AlertCircle size={14} className="text-[var(--alert-red)]" />;
       default: return <Info size={14} className="text-slate-500" />;
     }
   };
@@ -60,37 +61,37 @@ const PulseAnalyzer: React.FC = () => {
   }));
 
   return (
-    <div className="flex flex-col h-full bg-slate-950/40 backdrop-blur-md relative overflow-hidden border border-emerald-900/10">
+    <div className="flex flex-col h-full bg-[var(--slate-abyssal)]/40 backdrop-blur-md relative overflow-hidden border border-[var(--emerald-primary)]/10 scanline-effect glass-panel cyber-border">
       
       {/* Background HUD Graphics */}
       <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-        <TrendingUp size={200} className="text-emerald-500" />
+        <TrendingUp size={200} className="text-[var(--emerald-primary)]" />
       </div>
 
-      <div className="flex justify-between items-center p-4 border-b border-emerald-900/20 relative z-20 bg-slate-950/60">
+      <div className="flex justify-between items-center p-4 border-b border-[var(--emerald-primary)]/20 relative z-20 bg-slate-950/60">
         <div className="flex items-center space-x-3">
-          <div className="p-2 bg-emerald-900/20 border border-emerald-500/30 rounded">
-            <Activity size={20} className="text-emerald-400" />
+          <div className="p-2 bg-[var(--emerald-primary)]/10 border border-[var(--emerald-primary)]/30 rounded shadow-[0_0_15px_rgba(16,185,129,0.1)] glass-panel">
+            <Activity size={20} className="text-[var(--emerald-primary)] text-glow-emerald" />
           </div>
           <div>
-            <h2 className="text-xl font-black text-emerald-400 font-terminal uppercase tracking-tighter">Barrier_Integrity_Pulse</h2>
+            <h2 className="text-xl font-black text-[var(--emerald-primary)] font-terminal uppercase tracking-tighter text-glow-emerald">Barrier_Integrity_Pulse</h2>
             <div className="flex items-center space-x-2">
-               <span className="text-[8px] text-emerald-800 uppercase tracking-widest font-black">Sawtooth_Scavenger_Active</span>
+               <span className="text-[8px] text-[var(--emerald-primary)]/40 uppercase tracking-widest font-black">Sawtooth_Scavenger_Active</span>
             </div>
           </div>
         </div>
 
         <div className="flex items-center space-x-2">
-           <div className="bg-slate-900 border border-emerald-900/40 p-1 rounded-sm flex space-x-1">
+           <div className="bg-slate-900 border border-[var(--emerald-primary)]/40 p-1 rounded-sm flex space-x-1 glass-panel">
               <button 
                 onClick={() => setView('LIVE')}
-                className={`px-4 py-1.5 rounded-sm text-[9px] font-black uppercase transition-all ${view === 'LIVE' ? 'bg-emerald-500 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'text-emerald-800 hover:text-emerald-400'}`}
+                className={`px-4 py-1.5 rounded-sm text-[9px] font-black uppercase transition-all ${view === 'LIVE' ? 'bg-[var(--emerald-primary)] text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'text-[var(--emerald-primary)]/40 hover:text-[var(--emerald-primary)]'}`}
               >
                 Live_Monitor
               </button>
               <button 
                 onClick={() => setView('SCAVENGER')}
-                className={`px-4 py-1.5 rounded-sm text-[9px] font-black uppercase transition-all ${view === 'SCAVENGER' ? 'bg-purple-500 text-slate-950 shadow-[0_0_15px_rgba(168,85,247,0.3)]' : 'text-emerald-800 hover:text-purple-400'}`}
+                className={`px-4 py-1.5 rounded-sm text-[9px] font-black uppercase transition-all ${view === 'SCAVENGER' ? 'bg-purple-500 text-slate-950 shadow-[0_0_15px_rgba(168,85,247,0.3)]' : 'text-[var(--emerald-primary)]/40 hover:text-purple-400'}`}
               >
                 Integrity_Scavenger
               </button>
@@ -102,29 +103,34 @@ const PulseAnalyzer: React.FC = () => {
         
         {/* Main Chart Area */}
         <div className="flex-1 p-6 flex flex-col space-y-4">
-          <div className="flex-1 bg-slate-950/60 rounded-xl border border-emerald-900/30 p-6 relative group overflow-hidden">
+          <div className="flex-1 bg-slate-950/60 rounded-xl border border-[var(--emerald-primary)]/30 p-6 relative group overflow-hidden glass-panel cyber-border">
              <div className="absolute top-4 left-4 z-20 flex items-center space-x-3">
-                <div className="bg-slate-950/90 border border-emerald-900/50 px-3 py-1.5 rounded flex items-center space-x-2 shadow-2xl">
-                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                <div className="bg-slate-950/90 border border-[var(--emerald-primary)]/50 px-3 py-1.5 rounded flex items-center space-x-2 shadow-2xl glass-panel">
+                   <div className="w-1.5 h-1.5 rounded-full bg-[var(--emerald-primary)] animate-pulse shadow-[0_0_8px_var(--emerald-primary)]"></div>
                    <span className="text-[9px] font-black text-emerald-100 uppercase tracking-widest">{view === 'LIVE' ? 'ACTIVE_PRESSURE_STREAM' : 'SCAVENGED_OVERLAY'}</span>
                 </div>
                 {view === 'SCAVENGER' && (
                   <button 
                     onClick={() => setShowHistoricalOverlay(!showHistoricalOverlay)}
-                    className={`px-3 py-1.5 rounded border text-[9px] font-black uppercase transition-all ${showHistoricalOverlay ? 'bg-purple-500 border-purple-400 text-slate-950' : 'bg-slate-900 border-purple-900/30 text-purple-400'}`}
+                    className={`px-3 py-1.5 rounded border text-[9px] font-black uppercase transition-all glass-panel ${showHistoricalOverlay ? 'bg-purple-500 border-purple-400 text-slate-950' : 'bg-slate-900 border-purple-900/30 text-purple-400'}`}
                   >
                     Overlay_10YR_Ghost
                   </button>
                 )}
-                {view === 'LIVE' && (
-                  <button 
-                    onClick={() => setShowHistoricalEvents(!showHistoricalEvents)}
-                    className={`flex items-center space-x-2 px-3 py-1.5 rounded border text-[9px] font-black uppercase transition-all ${showHistoricalEvents ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'bg-slate-900 border-cyan-900/30 text-cyan-400 hover:border-cyan-400'}`}
-                  >
-                    <Activity size={12} className={showHistoricalEvents ? 'animate-pulse' : ''} />
-                    <span>Overlay_Historical_Events</span>
-                  </button>
-                )}
+                <button 
+                  onClick={() => setShowHistoricalEvents(!showHistoricalEvents)}
+                  className={`flex items-center space-x-2 px-3 py-1.5 rounded border text-[9px] font-black uppercase transition-all glass-panel ${showHistoricalEvents ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'bg-slate-900 border-cyan-900/30 text-cyan-400 hover:border-cyan-400'}`}
+                >
+                  <Activity size={12} className={showHistoricalEvents ? 'animate-pulse' : ''} />
+                  <span>Overlay_Historical_Events</span>
+                </button>
+                <button 
+                  onClick={() => setShowLeakThresholds(!showLeakThresholds)}
+                  className={`flex items-center space-x-2 px-3 py-1.5 rounded border text-[9px] font-black uppercase transition-all glass-panel ${showLeakThresholds ? 'bg-orange-500/20 border-orange-500 text-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.2)]' : 'bg-slate-900 border-orange-900/30 text-orange-400 hover:border-orange-400'}`}
+                >
+                  <AlertCircle size={12} className={showLeakThresholds ? 'animate-pulse' : ''} />
+                  <span>Leak_Thresholds</span>
+                </button>
              </div>
 
              <ResponsiveContainer width="100%" height="100%">
@@ -135,11 +141,11 @@ const PulseAnalyzer: React.FC = () => {
                       <stop offset="95%" stopColor={view === 'LIVE' ? analysis.color : '#a855f7'} stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#064e3b" opacity={0.1} />
-                  <XAxis dataKey="timestamp" stroke="#10b981" fontSize={9} axisLine={{stroke: '#064e3b'}} />
-                  <YAxis stroke="#10b981" fontSize={9} axisLine={{stroke: '#064e3b'}} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--emerald-primary)" opacity={0.1} />
+                  <XAxis dataKey="timestamp" stroke="var(--emerald-primary)" opacity={0.4} fontSize={9} axisLine={{stroke: 'var(--emerald-primary)', opacity: 0.2}} />
+                  <YAxis stroke="var(--emerald-primary)" opacity={0.4} fontSize={9} axisLine={{stroke: 'var(--emerald-primary)', opacity: 0.2}} />
                   <Tooltip 
-                    contentStyle={{ backgroundColor: '#020617', border: '1px solid #064e3b', fontSize: '10px' }}
+                    contentStyle={{ backgroundColor: '#020617', border: '1px solid var(--emerald-primary)', opacity: 0.8, fontSize: '10px' }}
                     itemStyle={{ textTransform: 'uppercase' }}
                   />
                   
@@ -166,23 +172,53 @@ const PulseAnalyzer: React.FC = () => {
                     strokeWidth={3} 
                     dot={{ r: 4, fill: '#020617', stroke: view === 'LIVE' ? analysis.color : '#a855f7', strokeWidth: 2 }}
                   />
+
+                  {showLeakThresholds && (
+                    <>
+                      <ReferenceArea y1={0} y2={300} fill="var(--emerald-primary)" fillOpacity={0.05} label={{ value: 'STABLE', position: 'insideLeft', fill: 'var(--emerald-primary)', fontSize: 8, fontWeight: 'bold', opacity: 0.5 }} />
+                      <ReferenceArea y1={300} y2={600} fill="#f59e0b" fillOpacity={0.05} label={{ value: 'LEAK_DETECTED', position: 'insideLeft', fill: '#f59e0b', fontSize: 8, fontWeight: 'bold', opacity: 0.5 }} />
+                      <ReferenceArea y1={600} y2={1000} fill="var(--alert-red)" fillOpacity={0.05} label={{ value: 'CRITICAL_LEAK', position: 'insideLeft', fill: 'var(--alert-red)', fontSize: 8, fontWeight: 'bold', opacity: 0.5 }} />
+                    </>
+                  )}
+
                   <ReferenceLine y={800} stroke="#FF5F1F" strokeDasharray="5 5" label={{ value: 'CRITICAL BLEED', position: 'insideRight', fill: '#FF5F1F', fontSize: 8, fontWeight: 'bold' }} />
                   
                   {/* Historical Events Overlay */}
-                  {view === 'LIVE' && showHistoricalEvents && mappedEvents.map((event) => (
+                  {showHistoricalEvents && mappedEvents.map((event) => (
                     <ReferenceLine 
                       key={event.id}
                       x={event.timestamp} 
-                      stroke={event.severity === 'CRITICAL' ? '#ef4444' : '#06b6d4'} 
+                      stroke={event.severity === 'CRITICAL' ? 'var(--alert-red)' : '#06b6d4'} 
                       strokeDasharray="3 3"
-                      label={{ 
-                        value: `${event.type} (${event.date})`, 
-                        position: 'insideTopLeft', 
-                        fill: event.severity === 'CRITICAL' ? '#ef4444' : '#06b6d4', 
-                        fontSize: 8, 
-                        fontWeight: 'bold',
-                        angle: -90,
-                        offset: 10
+                      label={({ viewBox }) => {
+                        const { x, y } = viewBox;
+                        const color = event.severity === 'CRITICAL' ? 'var(--alert-red)' : '#06b6d4';
+                        return (
+                          <g className="pointer-events-none">
+                            <rect 
+                              x={x - 40} 
+                              y={y + 10} 
+                              width={80} 
+                              height={14} 
+                              rx={4} 
+                              fill={color} 
+                              fillOpacity={0.1} 
+                              stroke={color} 
+                              strokeWidth={0.5} 
+                            />
+                            <text 
+                              x={x} 
+                              y={y + 20} 
+                              fill={color} 
+                              fontSize={7} 
+                              fontWeight="black" 
+                              textAnchor="middle"
+                              className="uppercase tracking-tighter"
+                            >
+                              {event.type} [{event.annulus}]
+                            </text>
+                          </g>
+                        );
                       }} 
                     />
                   ))}
@@ -191,46 +227,68 @@ const PulseAnalyzer: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-             <div className="p-4 bg-slate-950/80 border border-emerald-900/30 rounded-xl">
+             <div className="p-4 bg-slate-950/80 border border-[var(--emerald-primary)]/30 rounded-xl glass-panel cyber-border">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[9px] text-emerald-800 uppercase font-black tracking-widest">Lease_Slope</span>
-                  <Activity size={12} className="text-emerald-700" />
+                  <span className="text-[9px] text-[var(--emerald-primary)]/40 uppercase font-black tracking-widest">Lease_Slope</span>
+                  <Activity size={12} className="text-[var(--emerald-primary)]/40" />
                 </div>
-                <div className="text-2xl font-black text-emerald-100 font-terminal">{analysis.slope.toFixed(2)} PSI/U</div>
-                <div className="text-[8px] text-emerald-900 mt-1 uppercase font-black tracking-widest">DRIVE_FORCE: {Math.abs(analysis.slope) > 5 ? 'SUSTAINED' : 'RESIDUAL'}</div>
+                <div className="text-2xl font-black text-emerald-100 font-terminal text-glow-emerald">{analysis.slope.toFixed(2)} PSI/U</div>
+                <div className="text-[8px] text-[var(--emerald-primary)]/40 mt-1 uppercase font-black tracking-widest">DRIVE_FORCE: {Math.abs(analysis.slope) > 5 ? 'SUSTAINED' : 'RESIDUAL'}</div>
              </div>
-             <div className="p-4 bg-slate-950/80 border border-emerald-900/30 rounded-xl">
+             <div className="p-4 bg-slate-950/80 border border-[var(--emerald-primary)]/30 rounded-xl glass-panel cyber-border">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[9px] text-emerald-800 uppercase font-black tracking-widest">Integrity_Lock</span>
-                  <ShieldCheck size={12} className="text-emerald-700" />
+                  <span className="text-[9px] text-[var(--emerald-primary)]/40 uppercase font-black tracking-widest">Integrity_Lock</span>
+                  <ShieldCheck size={12} className="text-[var(--emerald-primary)]/40" />
                 </div>
-                <div className="text-2xl font-black text-emerald-100 font-terminal">{(analysis.rSquared * 100).toFixed(1)}%</div>
-                <div className="text-[8px] text-emerald-900 mt-1 uppercase font-black tracking-widest">R2_CONCORDANCE: {analysis.rSquared > 0.95 ? 'HIGH' : 'UNSTABLE'}</div>
+                <div className="text-2xl font-black text-emerald-100 font-terminal text-glow-emerald">{(analysis.rSquared * 100).toFixed(1)}%</div>
+                <div className="text-[8px] text-[var(--emerald-primary)]/40 mt-1 uppercase font-black tracking-widest">R2_CONCORDANCE: {analysis.rSquared > 0.95 ? 'HIGH' : 'UNSTABLE'}</div>
              </div>
           </div>
         </div>
 
         {/* Sidebar: Chronology or Diagnostic */}
-        <div className="w-96 border-l border-emerald-900/20 flex flex-col bg-slate-950/40 overflow-hidden">
+        <div className="w-96 border-l border-[var(--emerald-primary)]/20 flex flex-col bg-slate-950/40 overflow-hidden glass-panel">
           {view === 'LIVE' ? (
             <div className="p-6 space-y-6 flex-1 overflow-y-auto custom-scrollbar">
-              <h3 className="text-[12px] font-black text-emerald-400 uppercase tracking-[0.3em] mb-4">Sovereign_Diagnosis</h3>
-              <div className="p-5 bg-slate-900/50 border-l-4 rounded-r shadow-xl relative overflow-hidden" style={{ borderColor: analysis.color }}>
-                 <div className="absolute top-0 right-0 p-2 opacity-5"><Cpu size={40} className="text-emerald-500" /></div>
+              <h3 className="text-[12px] font-black text-[var(--emerald-primary)] uppercase tracking-[0.3em] mb-4 text-glow-emerald">Sovereign_Diagnosis</h3>
+              <div className="p-5 bg-slate-900/50 border-l-4 rounded-r shadow-xl relative overflow-hidden glass-panel cyber-border" style={{ borderColor: analysis.color }}>
+                 <div className="absolute top-0 right-0 p-2 opacity-5"><Cpu size={40} className="text-[var(--emerald-primary)]" /></div>
                  <span className="text-[10px] font-black uppercase tracking-widest mb-2 block" style={{ color: analysis.color }}>{analysis.status}</span>
                  <p className="text-[11px] text-emerald-100 font-terminal italic leading-relaxed">"{analysis.diagnosis}"</p>
               </div>
 
-              <div className="space-y-4 pt-6 border-t border-emerald-900/20">
-                 <h4 className="text-[10px] font-black text-emerald-900 uppercase tracking-widest">Active_Alert_Log</h4>
-                 <div className="space-y-2">
-                    <div className="p-3 bg-slate-950 border border-emerald-900/30 rounded text-[10px] font-terminal text-emerald-100/60 flex items-center justify-between">
-                       <span>BLEED_THRESHOLD_EXCEEDED</span>
-                       <span className="text-red-500 font-black">@09:12</span>
+              <div className="space-y-4 pt-6 border-t border-[var(--emerald-primary)]/20">
+                  <h4 className="text-[10px] font-black text-[var(--emerald-primary)]/40 uppercase tracking-widest">Leak_Severity_Index</h4>
+                  <div className="p-4 bg-slate-950/80 border border-[var(--emerald-primary)]/30 rounded-lg glass-panel cyber-border">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-[8px] text-[var(--emerald-primary)]/40 font-black uppercase">Current_Leak_Rate</span>
+                      <span className={`text-[10px] font-black ${analysis.slope > 10 ? 'text-[var(--alert-red)]' : 'text-orange-500'}`}>
+                        {analysis.slope > 15 ? 'CRITICAL' : 'MODERATE'}
+                      </span>
                     </div>
-                    <div className="p-3 bg-slate-950 border border-emerald-900/30 rounded text-[10px] font-terminal text-emerald-100/60 flex items-center justify-between">
+                    <div className="h-2 bg-slate-900 rounded-full overflow-hidden border border-[var(--emerald-primary)]/20">
+                      <div 
+                        className={`h-full transition-all duration-1000 ${analysis.slope > 15 ? 'bg-[var(--alert-red)] shadow-[0_0_10px_#ef4444]' : 'bg-orange-500 shadow-[0_0_10px_#f59e0b]'}`} 
+                        style={{ width: `${Math.min((analysis.slope / 25) * 100, 100)}%` }}
+                      ></div>
+                    </div>
+                    <div className="flex justify-between mt-2 text-[7px] font-black text-[var(--emerald-primary)]/40 uppercase">
+                      <span>0 PSI/U</span>
+                      <span>25 PSI/U</span>
+                    </div>
+                  </div>
+               </div>
+
+              <div className="space-y-4 pt-6 border-t border-[var(--emerald-primary)]/20">
+                 <h4 className="text-[10px] font-black text-[var(--emerald-primary)]/40 uppercase tracking-widest">Active_Alert_Log</h4>
+                 <div className="space-y-2">
+                    <div className="p-3 bg-slate-950 border border-[var(--emerald-primary)]/30 rounded text-[10px] font-terminal text-emerald-100/60 flex items-center justify-between glass-panel">
+                       <span>BLEED_THRESHOLD_EXCEEDED</span>
+                       <span className="text-[var(--alert-red)] font-black">@09:12</span>
+                    </div>
+                    <div className="p-3 bg-slate-950 border border-[var(--emerald-primary)]/30 rounded text-[10px] font-terminal text-emerald-100/60 flex items-center justify-between glass-panel">
                        <span>GRADIENT_STABILIZED</span>
-                       <span className="text-emerald-500 font-black">@08:45</span>
+                       <span className="text-[var(--emerald-primary)] font-black">@08:45</span>
                     </div>
                  </div>
               </div>
@@ -244,11 +302,11 @@ const PulseAnalyzer: React.FC = () => {
 
                <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-2 pb-6">
                   {MOCK_HISTORICAL_BARRIER_LOGS.map((event) => (
-                    <div key={event.id} className={`p-4 rounded-lg border-l-2 bg-slate-900/40 transition-all hover:bg-slate-900 relative group ${event.severity === 'CRITICAL' ? 'border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'border-purple-900/50'}`}>
+                    <div key={event.id} className={`p-4 rounded-lg border-l-2 bg-slate-900/40 transition-all hover:bg-slate-900 relative group glass-panel cyber-border ${event.severity === 'CRITICAL' ? 'border-[var(--alert-red)] shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'border-purple-900/50'}`}>
                        <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center space-x-2">
                              {getEventIcon(event.type)}
-                             <span className={`text-[10px] font-black uppercase tracking-widest ${event.severity === 'CRITICAL' ? 'text-red-400' : 'text-purple-300'}`}>{event.type}</span>
+                             <span className={`text-[10px] font-black uppercase tracking-widest ${event.severity === 'CRITICAL' ? 'text-[var(--alert-red)]' : 'text-purple-300'}`}>{event.type}</span>
                           </div>
                           <span className="text-[8px] font-mono text-slate-500">{event.date}</span>
                        </div>
