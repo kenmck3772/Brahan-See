@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Line, ComposedChart, ReferenceArea } from 'recharts';
+import React, { useMemo, useState, useEffect } from 'react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Line, ComposedChart, ReferenceArea, Scatter } from 'recharts';
 import { MOCK_PRESSURE_DATA, MOCK_HISTORICAL_BARRIER_LOGS, MOCK_SCAVENGED_PRESSURE_TESTS } from '../constants';
 import { calculateLinearRegression, diagnoseSawtooth } from '../forensic_logic/math';
 // Added Loader2 to imports from lucide-react
@@ -18,15 +18,46 @@ const PulseAnalyzer: React.FC = () => {
   const [showHistoricalOverlay, setShowHistoricalOverlay] = useState(false);
   const [showHistoricalEvents, setShowHistoricalEvents] = useState(false);
   const [showLeakThresholds, setShowLeakThresholds] = useState(false);
+  const [timeTravelYear, setTimeTravelYear] = useState(2026);
 
-  const rechargePhaseData = MOCK_PRESSURE_DATA.slice(0, 4);
+  // Generate historical data based on time travel year
+  const historicalData = useMemo(() => {
+    const yearDiff = 2026 - timeTravelYear;
+    const degradationFactor = 1 - (yearDiff * 0.05); // 5% less pressure per year back
+    
+    return MOCK_PRESSURE_DATA.map(d => ({
+      ...d,
+      baselinePressure: d.pressure,
+      pressure: Math.max(0, d.pressure * degradationFactor),
+      historicalPressure: Math.max(0, d.pressure * (degradationFactor - 0.1)) // Ghost trace for trend
+    }));
+  }, [timeTravelYear]);
+
+  const rechargePhaseData = historicalData.slice(0, 4);
   const pressures = rechargePhaseData.map(d => d.pressure);
   
   const analysis = useMemo(() => {
     const { slope, rSquared } = calculateLinearRegression(pressures);
     const diagnosis = diagnoseSawtooth(rSquared, slope);
-    return { slope, rSquared, ...diagnosis };
-  }, [pressures]);
+    
+    // Determine current leak zone based on latest pressure
+    const latestPressure = rechargePhaseData[rechargePhaseData.length - 1]?.pressure || 0;
+    let leakZone = 'STABLE';
+    let zoneColor = 'var(--emerald-primary)';
+    
+    if (latestPressure > 600) {
+      leakZone = 'CRITICAL';
+      zoneColor = 'var(--alert-red)';
+    } else if (latestPressure > 300) {
+      leakZone = 'WARNING';
+      zoneColor = '#f59e0b';
+    }
+    
+    // Calculate degradation trend percentage
+    const degradationTrend = ((2026 - timeTravelYear) * 5).toFixed(1);
+    
+    return { slope, rSquared, leakZone, zoneColor, degradationTrend, ...diagnosis };
+  }, [pressures, rechargePhaseData, timeTravelYear]);
 
   const triggerScavenge = () => {
     setIsScavenging(true);
@@ -134,7 +165,7 @@ const PulseAnalyzer: React.FC = () => {
              </div>
 
              <ResponsiveContainer width="100%" height="100%">
-               <ComposedChart data={MOCK_PRESSURE_DATA} margin={{ top: 40, right: 30, left: 0, bottom: 0 }}>
+               <ComposedChart data={historicalData} margin={{ top: 40, right: 30, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorPressure" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor={view === 'LIVE' ? analysis.color : '#a855f7'} stopOpacity={0.4}/>
@@ -143,23 +174,23 @@ const PulseAnalyzer: React.FC = () => {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--emerald-primary)" opacity={0.1} />
                   <XAxis dataKey="timestamp" stroke="var(--emerald-primary)" opacity={0.4} fontSize={9} axisLine={{stroke: 'var(--emerald-primary)', opacity: 0.2}} />
-                  <YAxis stroke="var(--emerald-primary)" opacity={0.4} fontSize={9} axisLine={{stroke: 'var(--emerald-primary)', opacity: 0.2}} />
+                  <YAxis stroke="var(--emerald-primary)" opacity={0.4} fontSize={9} axisLine={{stroke: 'var(--emerald-primary)', opacity: 0.2}} domain={[0, 1000]} />
                   <Tooltip 
                     contentStyle={{ backgroundColor: '#020617', border: '1px solid var(--emerald-primary)', opacity: 0.8, fontSize: '10px' }}
                     itemStyle={{ textTransform: 'uppercase' }}
                   />
                   
                   {/* Historical Ghost Trace */}
-                  {showHistoricalOverlay && (
+                  {(showHistoricalOverlay || timeTravelYear < 2026) && (
                     <Line 
                       type="monotone" 
-                      data={MOCK_SCAVENGED_PRESSURE_TESTS} 
-                      dataKey="pressure" 
+                      dataKey="historicalPressure" 
                       stroke="#a855f7" 
                       strokeWidth={1} 
                       strokeDasharray="4 4" 
                       dot={false}
                       opacity={0.4}
+                      name="PREVIOUS_EPOCH_TREND"
                     />
                   )}
 
@@ -170,14 +201,54 @@ const PulseAnalyzer: React.FC = () => {
                     fillOpacity={1} 
                     fill="url(#colorPressure)" 
                     strokeWidth={3} 
-                    dot={{ r: 4, fill: '#020617', stroke: view === 'LIVE' ? analysis.color : '#a855f7', strokeWidth: 2 }}
+                    dot={false}
+                    name="CURRENT_PRESSURE_PULSE"
+                  />
+
+                  {/* Original Data Points - Distinct Visual Style */}
+                  <Scatter 
+                    dataKey="baselinePressure" 
+                    fill="transparent"
+                    stroke={view === 'LIVE' ? 'var(--emerald-primary)' : '#a855f7'}
+                    strokeWidth={1}
+                    shape={(props: any) => {
+                      const { cx, cy, stroke } = props;
+                      return (
+                        <g>
+                          <circle cx={cx} cy={cy} r={4} fill="none" stroke={stroke} strokeWidth={1} opacity={0.5} />
+                          <circle cx={cx} cy={cy} r={1.5} fill={stroke} />
+                          <circle cx={cx} cy={cy} r={6} fill="none" stroke={stroke} strokeWidth={0.5} opacity={0.2} />
+                        </g>
+                      );
+                    }}
+                    name="ORIGINAL_BASELINE_POINTS"
                   />
 
                   {showLeakThresholds && (
                     <>
-                      <ReferenceArea y1={0} y2={300} fill="var(--emerald-primary)" fillOpacity={0.05} label={{ value: 'STABLE', position: 'insideLeft', fill: 'var(--emerald-primary)', fontSize: 8, fontWeight: 'bold', opacity: 0.5 }} />
-                      <ReferenceArea y1={300} y2={600} fill="#f59e0b" fillOpacity={0.05} label={{ value: 'LEAK_DETECTED', position: 'insideLeft', fill: '#f59e0b', fontSize: 8, fontWeight: 'bold', opacity: 0.5 }} />
-                      <ReferenceArea y1={600} y2={1000} fill="var(--alert-red)" fillOpacity={0.05} label={{ value: 'CRITICAL_LEAK', position: 'insideLeft', fill: 'var(--alert-red)', fontSize: 8, fontWeight: 'bold', opacity: 0.5 }} />
+                      <ReferenceArea 
+                        y1={0} 
+                        y2={300} 
+                        fill="var(--emerald-primary)" 
+                        fillOpacity={0.12} 
+                        label={{ value: 'STABLE_ZONE', position: 'insideTopLeft', fill: 'var(--emerald-primary)', fontSize: 8, fontWeight: 'black', opacity: 0.8, offset: 10 }} 
+                      />
+                      <ReferenceArea 
+                        y1={300} 
+                        y2={600} 
+                        fill="#f59e0b" 
+                        fillOpacity={0.12} 
+                        label={{ value: 'WARNING_ZONE', position: 'insideTopLeft', fill: '#f59e0b', fontSize: 8, fontWeight: 'black', opacity: 0.8, offset: 10 }} 
+                      />
+                      <ReferenceArea 
+                        y1={600} 
+                        y2={1000} 
+                        fill="var(--alert-red)" 
+                        fillOpacity={0.12} 
+                        label={{ value: 'CRITICAL_ZONE', position: 'insideTopLeft', fill: 'var(--alert-red)', fontSize: 8, fontWeight: 'black', opacity: 0.8, offset: 10 }} 
+                      />
+                      <ReferenceLine y={300} stroke="var(--emerald-primary)" strokeDasharray="3 3" opacity={0.4} />
+                      <ReferenceLine y={600} stroke="#f59e0b" strokeDasharray="3 3" opacity={0.4} />
                     </>
                   )}
 
@@ -224,9 +295,32 @@ const PulseAnalyzer: React.FC = () => {
                   ))}
                </ComposedChart>
              </ResponsiveContainer>
+
+             {/* Time Travel Slider */}
+             <div className="absolute bottom-4 left-6 right-6 z-20 bg-slate-950/90 border border-[var(--emerald-primary)]/30 p-3 rounded-lg flex items-center space-x-4 glass-panel shadow-2xl">
+                <div className="flex items-center space-x-2 min-w-[120px]">
+                  <History size={14} className="text-purple-400" />
+                  <span className="text-[9px] font-black text-purple-300 uppercase tracking-widest">Time_Travel</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="2010" 
+                  max="2026" 
+                  step="1" 
+                  value={timeTravelYear} 
+                  onChange={(e) => setTimeTravelYear(parseInt(e.target.value))}
+                  className="flex-1 h-1 bg-slate-800 rounded-full appearance-none cursor-pointer accent-purple-500"
+                />
+                <div className="flex items-center space-x-3 min-w-[100px] justify-end">
+                  <span className="text-[11px] font-black text-purple-400 font-mono">{timeTravelYear}</span>
+                  <div className="px-2 py-0.5 bg-purple-500/10 border border-purple-500/30 rounded text-[8px] font-black text-purple-400 uppercase">
+                    {timeTravelYear === 2026 ? 'LIVE_EPOCH' : 'HISTORICAL_AUDIT'}
+                  </div>
+                </div>
+             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
              <div className="p-4 bg-slate-950/80 border border-[var(--emerald-primary)]/30 rounded-xl glass-panel cyber-border">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[9px] text-[var(--emerald-primary)]/40 uppercase font-black tracking-widest">Lease_Slope</span>
@@ -243,6 +337,14 @@ const PulseAnalyzer: React.FC = () => {
                 <div className="text-2xl font-black text-emerald-100 font-terminal text-glow-emerald">{(analysis.rSquared * 100).toFixed(1)}%</div>
                 <div className="text-[8px] text-[var(--emerald-primary)]/40 mt-1 uppercase font-black tracking-widest">R2_CONCORDANCE: {analysis.rSquared > 0.95 ? 'HIGH' : 'UNSTABLE'}</div>
              </div>
+             <div className="p-4 bg-slate-950/80 border border-[var(--emerald-primary)]/30 rounded-xl glass-panel cyber-border">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[9px] text-purple-400 uppercase font-black tracking-widest">Degradation_Trend</span>
+                  <TrendingUp size={12} className="text-purple-400/40" />
+                </div>
+                <div className="text-2xl font-black text-purple-100 font-terminal text-glow-purple">-{analysis.degradationTrend}%</div>
+                <div className="text-[8px] text-purple-400/40 mt-1 uppercase font-black tracking-widest">VS_2026_BASELINE</div>
+             </div>
           </div>
         </div>
 
@@ -253,7 +355,18 @@ const PulseAnalyzer: React.FC = () => {
               <h3 className="text-[12px] font-black text-[var(--emerald-primary)] uppercase tracking-[0.3em] mb-4 text-glow-emerald">Sovereign_Diagnosis</h3>
               <div className="p-5 bg-slate-900/50 border-l-4 rounded-r shadow-xl relative overflow-hidden glass-panel cyber-border" style={{ borderColor: analysis.color }}>
                  <div className="absolute top-0 right-0 p-2 opacity-5"><Cpu size={40} className="text-[var(--emerald-primary)]" /></div>
-                 <span className="text-[10px] font-black uppercase tracking-widest mb-2 block" style={{ color: analysis.color }}>{analysis.status}</span>
+                 <div className="flex justify-between items-start mb-2">
+                   <span className="text-[10px] font-black uppercase tracking-widest block" style={{ color: analysis.color }}>{analysis.status}</span>
+                   {showLeakThresholds && (
+                     <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border ${
+                       analysis.leakZone === 'CRITICAL' ? 'bg-red-500/20 border-red-500 text-red-400' :
+                       analysis.leakZone === 'WARNING' ? 'bg-orange-500/20 border-orange-500 text-orange-400' :
+                       'bg-emerald-500/20 border-emerald-500 text-emerald-400'
+                     }`}>
+                       {analysis.leakZone}_ZONE
+                     </span>
+                   )}
+                 </div>
                  <p className="text-[11px] text-emerald-100 font-terminal italic leading-relaxed">"{analysis.diagnosis}"</p>
               </div>
 

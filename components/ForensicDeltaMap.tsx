@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Map as MapIcon, AlertTriangle, Crosshair, Target, Info, ShieldCheck, ArrowRightLeft, Compass } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Map as MapIcon, AlertTriangle, Crosshair, Target, Info, ShieldCheck, ArrowRightLeft, Compass, Activity, FileText, History, ChevronDown, ChevronUp } from 'lucide-react';
 import ProvenanceTooltip from './ProvenanceTooltip';
 import { MOCK_WELLS } from '../constants';
-import { ForensicWell } from '../types';
+import { ForensicWell, TraumaEvent } from '../types';
+import { useUnit } from '../src/context/UnitContext';
 
 interface ForensicDeltaMapProps {
   highlightedField?: string | null;
@@ -12,15 +13,72 @@ interface ForensicDeltaMapProps {
 }
 
 const ForensicDeltaMap: React.FC<ForensicDeltaMapProps> = ({ highlightedField, userLocation, onSelectWell, selectedWellId: externalSelectedWellId }) => {
+  const { unit, convertToDisplay, unitLabel } = useUnit();
   const [internalSelectedWell, setInternalSelectedWell] = useState<string | null>(null);
   const [showOffsets, setShowOffsets] = useState(true);
+  const [showProduction, setShowProduction] = useState(true);
+  const [showNotes, setShowNotes] = useState(true);
+  const [isLogsExpanded, setIsLogsExpanded] = useState(false);
+  const [filteredLogs, setFilteredLogs] = useState<TraumaEvent[]>([]);
 
   const selectedWell = externalSelectedWellId || internalSelectedWell;
 
+  useEffect(() => {
+    if (!selectedWell) {
+      setFilteredLogs([]);
+      return;
+    }
+
+    const fetchLogs = () => {
+      try {
+        const saved = localStorage.getItem('BRAHAN_BLACK_BOX_LOGS');
+        if (saved) {
+          const allLogs: TraumaEvent[] = JSON.parse(saved);
+          const well = MOCK_WELLS.find(w => w.id === selectedWell);
+          
+          // Filter logs relevant to this wellbore
+          // Heuristic: check if well ID or field name is in description
+          const filtered = allLogs.filter(log => {
+            const desc = log.description.toLowerCase();
+            const wellId = selectedWell.toLowerCase();
+            const field = well?.field.toLowerCase() || '';
+            
+            return desc.includes(wellId) || (field && desc.includes(field));
+          });
+          
+          setFilteredLogs(filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+        }
+      } catch (err) {
+        console.error('[ForensicDeltaMap:Logs] Failed to fetch logs:', err);
+      }
+    };
+
+    fetchLogs();
+    
+    // Listen for storage changes to keep logs in sync
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'BRAHAN_BLACK_BOX_LOGS' || !e.key) {
+        fetchLogs();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorage);
+    // Custom event for same-window updates
+    window.addEventListener('BRAHAN_LOGS_UPDATED', fetchLogs);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('BRAHAN_LOGS_UPDATED', fetchLogs);
+    };
+  }, [selectedWell]);
+
   const handleWellClick = (wellId: string) => {
-    setInternalSelectedWell(wellId);
+    const isCurrentlySelected = selectedWell === wellId;
+    const nextWellId = isCurrentlySelected ? null : wellId;
+    
+    setInternalSelectedWell(nextWellId);
     if (onSelectWell) {
-      onSelectWell(wellId);
+      onSelectWell(nextWellId || '');
     }
   };
 
@@ -31,7 +89,7 @@ const ForensicDeltaMap: React.FC<ForensicDeltaMapProps> = ({ highlightedField, u
           <MapIcon size={16} className="text-fuchsia-500" />
           <span className="text-[10px] font-black uppercase tracking-widest text-white">Forensic Geolocation Audit</span>
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-3">
           <button 
             onClick={() => setShowOffsets(!showOffsets)}
             className={`flex items-center space-x-2 text-[8px] font-black px-3 py-1.5 rounded-lg border transition-all duration-300 ${
@@ -39,10 +97,38 @@ const ForensicDeltaMap: React.FC<ForensicDeltaMapProps> = ({ highlightedField, u
                 ? 'bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/50 shadow-[0_0_15px_rgba(217,70,239,0.2)]' 
                 : 'bg-slate-800 text-slate-500 border-slate-700 grayscale'
             }`}
+            title="Toggle Truth Offsets"
           >
             <ArrowRightLeft size={12} className={showOffsets ? 'animate-pulse' : ''} />
-            <span>{showOffsets ? 'HIDE_TRUTH_OFFSETS' : 'SHOW_TRUTH_OFFSETS'}</span>
+            <span>OFFSETS</span>
           </button>
+
+          <button 
+            onClick={() => setShowProduction(!showProduction)}
+            className={`flex items-center space-x-2 text-[8px] font-black px-3 py-1.5 rounded-lg border transition-all duration-300 ${
+              showProduction 
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.2)]' 
+                : 'bg-slate-800 text-slate-500 border-slate-700 grayscale'
+            }`}
+            title="Toggle Production Metrics"
+          >
+            <Activity size={12} className={showProduction ? 'animate-pulse' : ''} />
+            <span>PROD</span>
+          </button>
+
+          <button 
+            onClick={() => setShowNotes(!showNotes)}
+            className={`flex items-center space-x-2 text-[8px] font-black px-3 py-1.5 rounded-lg border transition-all duration-300 ${
+              showNotes 
+                ? 'bg-blue-500/20 text-blue-400 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.2)]' 
+                : 'bg-slate-800 text-slate-500 border-slate-700 grayscale'
+            }`}
+            title="Toggle Forensic Notes"
+          >
+            <FileText size={12} className={showNotes ? 'animate-pulse' : ''} />
+            <span>NOTES</span>
+          </button>
+
           <span className="text-[8px] font-black px-2 py-1 bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/30 rounded flex items-center">
             <AlertTriangle size={10} className="mr-1" /> Slot Drift Detected
           </span>
@@ -134,11 +220,27 @@ const ForensicDeltaMap: React.FC<ForensicDeltaMapProps> = ({ highlightedField, u
                     {isSelected && <div className="absolute inset-0 rounded-full border border-white animate-ping"></div>}
                   </div>
                   
-                  {/* Label */}
-                  <div className="absolute top-6 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                  {/* Label & Data Points */}
+                  <div className="absolute top-6 left-1/2 -translate-x-1/2 flex flex-col items-center space-y-1 pointer-events-none">
                     <span className={`text-[9px] font-mono font-black px-1.5 py-0.5 rounded bg-slate-950/90 border shadow-xl ${well.status === 'critical' ? 'text-red-400 border-red-500/50' : well.status === 'conflict' ? 'text-fuchsia-400 border-fuchsia-500/50' : 'text-emerald-400 border-emerald-500/50'}`}>
                       {well.id}
                     </span>
+                    
+                    {/* Well-specific data points toggleable on selection */}
+                    {isSelected && (
+                      <div className="flex flex-col items-center space-y-1 animate-in fade-in slide-in-from-top-1 duration-300">
+                        {showProduction && (
+                          <div className="bg-emerald-500/90 text-slate-950 px-1.5 py-0.5 rounded text-[7px] font-black whitespace-nowrap shadow-lg border border-emerald-400/50">
+                            {well.auditedProd.toLocaleString()} BBL/D
+                          </div>
+                        )}
+                        {showNotes && (
+                          <div className="bg-blue-500/90 text-white px-1.5 py-0.5 rounded text-[7px] font-bold whitespace-nowrap shadow-lg border border-blue-400/50 max-w-[120px] truncate">
+                            {well.deviationAudit}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -202,7 +304,23 @@ const ForensicDeltaMap: React.FC<ForensicDeltaMapProps> = ({ highlightedField, u
                       {well.id}
                       <span className="ml-2 text-[8px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">{well.field}</span>
                     </h4>
-                    <span className="text-[9px] text-slate-500 uppercase tracking-widest">Forensic Geolocation Audit</span>
+                    <div className="flex items-center space-x-2 mt-1">
+                      <button 
+                        onClick={() => setShowProduction(!showProduction)}
+                        className={`p-1 rounded border transition-all ${showProduction ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}
+                        title={showProduction ? "Hide Production Metrics" : "Show Production Metrics"}
+                      >
+                        <Activity size={10} />
+                      </button>
+                      <button 
+                        onClick={() => setShowNotes(!showNotes)}
+                        className={`p-1 rounded border transition-all ${showNotes ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}
+                        title={showNotes ? "Hide Forensic Notes" : "Show Forensic Notes"}
+                      >
+                        <FileText size={10} />
+                      </button>
+                      <span className="text-[9px] text-slate-500 uppercase tracking-widest ml-1">Forensic Geolocation Audit</span>
+                    </div>
                   </div>
                   <button onClick={() => setInternalSelectedWell(null)} className="text-slate-500 hover:text-white p-1">×</button>
                 </div>
@@ -237,7 +355,7 @@ const ForensicDeltaMap: React.FC<ForensicDeltaMapProps> = ({ highlightedField, u
                         Slot_Offset_Drift
                       </span>
                       <span className={`text-sm font-mono font-bold ${well.status === 'nominal' ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {driftMeters.toFixed(1)}m
+                        {convertToDisplay(driftMeters).toFixed(1)}{unitLabel}
                       </span>
                     </div>
                     <div className="w-full bg-slate-900 rounded-full h-1 mt-2 overflow-hidden">
@@ -251,16 +369,18 @@ const ForensicDeltaMap: React.FC<ForensicDeltaMapProps> = ({ highlightedField, u
                   </div>
 
                   {/* Production Delta (Existing) */}
-                  <div className="space-y-2 pt-2 border-t border-slate-800">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[9px] text-slate-500 uppercase tracking-wider">Reported Prod</span>
-                      <span className="text-[10px] font-mono text-slate-300">{well.reportedProd.toLocaleString()} bbl/d</span>
+                  {showProduction && (
+                    <div className="space-y-2 pt-2 border-t border-slate-800">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] text-slate-500 uppercase tracking-wider">Reported Prod</span>
+                        <span className="text-[10px] font-mono text-slate-300">{well.reportedProd.toLocaleString()} bbl/d</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] text-emerald-500 uppercase tracking-wider font-bold">Audited Prod</span>
+                        <span className="text-[10px] font-mono text-emerald-400 font-bold">{well.auditedProd.toLocaleString()} bbl/d</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-[9px] text-emerald-500 uppercase tracking-wider font-bold">Audited Prod</span>
-                      <span className="text-[10px] font-mono text-emerald-400 font-bold">{well.auditedProd.toLocaleString()} bbl/d</span>
-                    </div>
-                  </div>
+                  )}
 
                   {/* Forensic Integrity Score */}
                   <div className="p-3 bg-slate-900/80 rounded-lg border border-slate-800 flex items-center justify-between">
@@ -278,18 +398,71 @@ const ForensicDeltaMap: React.FC<ForensicDeltaMapProps> = ({ highlightedField, u
                   </div>
 
                   {/* Deviation & Forensic Notes */}
-                  <div className="space-y-3 pt-3 border-t border-slate-800">
-                    <div className="flex items-start space-x-3">
-                      <Compass size={14} className="text-fuchsia-500 mt-0.5" />
-                      <div>
-                        <span className="text-[8px] font-black text-slate-500 uppercase block">Deviation_Audit</span>
-                        <span className="text-[10px] font-terminal text-fuchsia-300">{well.deviationAudit}</span>
+                  {showNotes && (
+                    <div className="space-y-3 pt-3 border-t border-slate-800">
+                      <div className="flex items-start space-x-3">
+                        <Compass size={14} className="text-fuchsia-500 mt-0.5" />
+                        <div>
+                          <span className="text-[8px] font-black text-slate-500 uppercase block">Deviation_Audit</span>
+                          <span className="text-[10px] font-terminal text-fuchsia-300">{well.deviationAudit}</span>
+                        </div>
+                      </div>
+                      <div className="p-2 bg-slate-900/80 rounded border border-slate-800">
+                        <span className="text-[7px] font-black text-slate-600 uppercase block mb-1">Forensic_Note // {well.lastAudit}</span>
+                        <p className="text-[9px] text-slate-400 leading-relaxed italic">"{well.forensicNote}"</p>
                       </div>
                     </div>
-                    <div className="p-2 bg-slate-900/80 rounded border border-slate-800">
-                      <span className="text-[7px] font-black text-slate-600 uppercase block mb-1">Forensic_Note // {well.lastAudit}</span>
-                      <p className="text-[9px] text-slate-400 leading-relaxed italic">"{well.forensicNote}"</p>
-                    </div>
+                  )}
+
+                  {/* Expandable Black Box Logs */}
+                  <div className="pt-3 border-t border-slate-800">
+                    <button 
+                      onClick={() => setIsLogsExpanded(!isLogsExpanded)}
+                      className="w-full flex items-center justify-between p-2 rounded bg-slate-900/50 border border-slate-800 hover:bg-slate-800 transition-all group"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <History size={12} className="text-fuchsia-500 group-hover:rotate-12 transition-transform" />
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Black_Box_Logs</span>
+                        <span className="text-[8px] px-1.5 py-0.5 rounded bg-slate-800 text-fuchsia-400 border border-fuchsia-500/30">
+                          {filteredLogs.length}
+                        </span>
+                      </div>
+                      {isLogsExpanded ? <ChevronUp size={12} className="text-slate-500" /> : <ChevronDown size={12} className="text-slate-500" />}
+                    </button>
+
+                    {isLogsExpanded && (
+                      <div className="mt-2 space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar animate-in fade-in slide-in-from-top-2 duration-300">
+                        {filteredLogs.length > 0 ? (
+                          filteredLogs.map((log) => (
+                            <div key={log.id} className="p-2 rounded bg-slate-900/30 border border-slate-800/50 hover:border-fuchsia-500/30 transition-all">
+                              <div className="flex justify-between items-start mb-1">
+                                <span className={`text-[7px] font-black px-1 rounded ${
+                                  log.severity === 'CRITICAL' ? 'bg-red-500/20 text-red-400' : 
+                                  log.severity === 'WARNING' ? 'bg-yellow-500/20 text-yellow-400' : 
+                                  'bg-blue-500/20 text-blue-400'
+                                }`}>
+                                  {log.severity}
+                                </span>
+                                <span className="text-[7px] font-mono text-slate-600">
+                                  {new Date(log.timestamp).toLocaleTimeString()}
+                                </span>
+                              </div>
+                              <p className="text-[9px] text-slate-400 leading-tight line-clamp-2">
+                                {log.description}
+                              </p>
+                              <div className="flex justify-between items-center mt-1">
+                                <span className="text-[7px] font-mono text-slate-500 uppercase">{log.layer}</span>
+                                <span className="text-[7px] font-mono text-fuchsia-500/70">{convertToDisplay(log.depth).toFixed(1)}{unitLabel}</span>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="py-4 text-center">
+                            <span className="text-[8px] font-mono text-slate-600 uppercase tracking-widest">No_Relevant_Logs_Isolated</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

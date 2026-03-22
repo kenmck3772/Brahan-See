@@ -3,15 +3,14 @@ import { AnalysisResult } from '../types';
 import { Database, Link, ShieldCheck, Lock, ChevronRight, Hash, Clock, FileWarning } from 'lucide-react';
 
 const Vault: React.FC = () => {
-  const [logs] = useState<(AnalysisResult & { hash: string, ndrUrl: string })[]>([
+  const [logs] = useState<(AnalysisResult & { hash: string })[]>([
     {
       id: 'ARCH-001',
       title: 'Thistle A7 Trauma Sync',
       status: 'VERIFIED',
       timestamp: '2024-05-12 14:30',
       summary: 'Vertical datum discordance of 14.5m corrected. Casing scar identified at 1245.5m.',
-      hash: 'SHA512:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-      ndrUrl: 'https://ndr.nstauthority.co.uk/archive/well/thistle-a7'
+      hash: 'SHA512:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
     },
     {
       id: 'ARCH-002',
@@ -19,8 +18,7 @@ const Vault: React.FC = () => {
       status: 'CRITICAL',
       timestamp: '2024-05-15 09:12',
       summary: 'Linear pressure recharge (1.6 PSI/min) suggests high-integrity reservoir communication in A-Annulus.',
-      hash: 'SHA512:f7fbba6e0636f890e56fbbf3283e524c6fa3204ae298382d624741d0dc2638bc',
-      ndrUrl: 'https://ndr.nstauthority.co.uk/archive/well/tyra-alpha-42'
+      hash: 'SHA512:f7fbba6e0636f890e56fbbf3283e524c6fa3204ae298382d624741d0dc2638bc'
     }
   ]);
 
@@ -82,11 +80,6 @@ const Vault: React.FC = () => {
                 <Hash size={10} className="text-[var(--emerald-primary)]/30 flex-shrink-0" />
                 <span className="text-[8px] text-[var(--emerald-primary)]/40 uppercase font-black">Integrity_Hash:</span>
                 <span className="text-[8px] text-[var(--emerald-primary)]/60 truncate font-mono tracking-tighter">{log.hash}</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Link size={10} className="text-[var(--emerald-primary)]/30 flex-shrink-0" />
-                <span className="text-[8px] text-[var(--emerald-primary)]/40 uppercase font-black">Archive_Link:</span>
-                <a href={log.ndrUrl} target="_blank" rel="noreferrer" className="text-[8px] text-[var(--emerald-primary)]/80 hover:text-white truncate hover:underline transition-colors font-mono">{log.ndrUrl}</a>
               </div>
             </div>
 

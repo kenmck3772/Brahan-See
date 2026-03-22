@@ -8,9 +8,11 @@ import {
   History, Download, FileCheck, Layers,
   ChevronRight
 } from 'lucide-react';
+import { useTheme } from '../src/context/ThemeContext';
 
 const NorwaySovereign: React.FC = () => {
   const [isScanning, setIsScanning] = useState(false);
+  const { theme } = useTheme();
   const [scannedWells, setScannedWells] = useState<string[]>([]);
   const [fiscalReclaim, setFiscalReclaim] = useState(0);
   const [activeStrategy, setActiveStrategy] = useState('MICA_MASKING_RECOVERY');
@@ -25,32 +27,52 @@ const NorwaySovereign: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full space-y-4 p-6 bg-slate-950/40 relative overflow-hidden font-terminal">
+    <div className={`flex flex-col h-full space-y-4 p-6 relative overflow-hidden font-terminal transition-all duration-500 ${
+      theme === 'CLEAN' ? 'bg-white text-slate-900 border-slate-200' :
+      theme === 'HIGH_CONTRAST' ? 'bg-white text-black border-black border-2 rounded-none' :
+      'bg-slate-950/40'
+    }`}>
       {/* Background HUD Decorations */}
-      <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+      <div className={`absolute top-0 right-0 p-8 opacity-5 pointer-events-none ${theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'hidden' : ''}`}>
         <Globe size={400} className="text-blue-500 animate-spin-slow" />
       </div>
 
       <div className="flex flex-col space-y-6 max-w-6xl mx-auto w-full relative z-10 h-full">
         {/* Module Header */}
-        <div className="flex items-center justify-between border-b border-blue-900/30 pb-4">
+        <div className={`flex items-center justify-between border-b pb-4 transition-all ${
+          theme === 'CLEAN' ? 'border-slate-200' :
+          theme === 'HIGH_CONTRAST' ? 'border-black border-b-2' :
+          'border-blue-900/30'
+        }`}>
           <div className="flex items-center space-x-4">
-            <div className="p-3 bg-blue-500/10 border border-blue-500/40 rounded shadow-lg shadow-blue-500/5">
-              <Anchor size={24} className="text-blue-400 animate-bounce-slow" />
+            <div className={`p-3 rounded shadow-lg transition-all border ${
+              theme === 'CLEAN' ? 'bg-slate-100 border-slate-200' :
+              theme === 'HIGH_CONTRAST' ? 'bg-white border-black border-2' :
+              'bg-blue-500/10 border-blue-500/40 shadow-blue-500/5'
+            }`}>
+              <Anchor size={24} className={theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'text-slate-900' : 'text-blue-400 animate-bounce-slow'} />
             </div>
             <div>
-              <h2 className="text-2xl font-black text-blue-400 uppercase tracking-tighter">{">>>"} NODE_LOAD: NORWAY_SOVEREIGN (Sodir)</h2>
-              <p className="text-xs text-blue-800 font-black uppercase tracking-[0.4em]">Auth: NPD_FACTPAGES_UPLINK // Fiscal_Hook: 78_PERCENT_TAX_REFUND</p>
+              <h2 className={`text-2xl font-black uppercase tracking-tighter transition-all ${
+                theme === 'CLEAN' ? 'text-slate-900' :
+                theme === 'HIGH_CONTRAST' ? 'text-black' :
+                'text-blue-400'
+              }`}>{">>>"} NODE_LOAD: NORWAY_SOVEREIGN (Sodir)</h2>
+              <p className={`text-xs font-black uppercase tracking-[0.4em] transition-all ${
+                theme === 'CLEAN' ? 'text-slate-400' :
+                theme === 'HIGH_CONTRAST' ? 'text-black' :
+                'text-blue-800'
+              }`}>Auth: NPD_FACTPAGES_UPLINK // Fiscal_Hook: 78_PERCENT_TAX_REFUND</p>
             </div>
           </div>
           <div className="flex items-center space-x-6 text-right">
              <div className="flex flex-col">
-                <span className="text-[8px] text-blue-900 uppercase font-black">Fiscal_Reclaim_Target</span>
-                <span className="text-xl font-black text-blue-500">{fiscalReclaim.toFixed(2)}M NOK</span>
+                <span className={`text-[8px] uppercase font-black ${theme === 'CLEAN' ? 'text-slate-400' : theme === 'HIGH_CONTRAST' ? 'text-black' : 'text-blue-900'}`}>Fiscal_Reclaim_Target</span>
+                <span className={`text-xl font-black ${theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'text-slate-900' : 'text-blue-500'}`}>{fiscalReclaim.toFixed(2)}M NOK</span>
              </div>
              <div className="flex flex-col">
-                <span className="text-[8px] text-blue-900 uppercase font-black">Node_Status</span>
-                <span className="text-xl font-black text-blue-500">AUTHORIZED</span>
+                <span className={`text-[8px] uppercase font-black ${theme === 'CLEAN' ? 'text-slate-400' : theme === 'HIGH_CONTRAST' ? 'text-black' : 'text-blue-900'}`}>Node_Status</span>
+                <span className={`text-xl font-black ${theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'text-slate-900' : 'text-blue-500'}`}>AUTHORIZED</span>
              </div>
           </div>
         </div>

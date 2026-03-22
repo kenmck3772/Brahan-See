@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import { MissionTarget, ForensicWell } from '../types';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, AreaChart, Area } from 'recharts';
-import NDRCrawler from './NDRCrawler'; // Imported the new component
 import MissionControl from './MissionControl';
 import GhostSync from './GhostSync';
 import TraumaNode from './TraumaNode';
@@ -26,6 +25,7 @@ import ForensicDeltaMap from './ForensicDeltaMap';
 import ForensicDeltaSummary from './ForensicDeltaSummary';
 import TimeTravelSlider from './TimeTravelSlider';
 import { MOCK_WELLS } from '../constants';
+import { useTheme } from '../src/context/ThemeContext';
 
 // Import Gemini service for AI insight
 import { getForensicInsight } from '../services/geminiService';
@@ -54,6 +54,7 @@ interface StageProps {
 
 const SovereignStage: React.FC<StageProps> = ({ engagedModules, selectedTargetId, userLocation, onSelectTarget }) => {
   const activeCount = Object.values(engagedModules).filter(Boolean).length;
+  const { theme } = useTheme();
 
   const [geminiInsight, setGeminiInsight] = useState<string>('');
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
@@ -100,20 +101,40 @@ const SovereignStage: React.FC<StageProps> = ({ engagedModules, selectedTargetId
 
   if (activeCount === 0) {
     return (
-      <div className="h-full flex flex-col items-center justify-center relative overflow-hidden rounded-2xl border border-slate-800/50 bg-[var(--slate-abyssal)] glass-panel cyber-border scanline-effect">
-        <div className="absolute inset-0 flex items-center justify-center opacity-20 mix-blend-luminosity">
+      <div className={`h-full flex flex-col items-center justify-center relative overflow-hidden rounded-2xl border transition-all duration-500 ${
+        theme === 'CLEAN' ? 'bg-white border-slate-200 shadow-sm' :
+        theme === 'HIGH_CONTRAST' ? 'bg-white border-black border-2 rounded-none' :
+        'bg-[var(--slate-abyssal)] border-slate-800/50 glass-panel cyber-border scanline-effect'
+      }`}>
+        <div className={`absolute inset-0 flex items-center justify-center opacity-20 mix-blend-luminosity ${theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'hidden' : ''}`}>
           <img src="/brahan-seer.jpg" alt="Brahan Seer" className="object-cover w-full h-full" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
           <Radar size={400} className="text-slate-500 animate-[spin_10s_linear_infinite] hidden absolute" />
         </div>
-        <div className="absolute inset-0 bg-gradient-to-t from-[var(--slate-abyssal)] via-transparent to-[var(--slate-abyssal)]/80"></div>
-        <div className="relative z-10 flex flex-col items-center opacity-90 backdrop-blur-md p-10 rounded-3xl border border-[var(--emerald-primary)]/20 bg-[var(--slate-abyssal)]/60 shadow-[0_0_50px_rgba(0,0,0,0.8)] glass-panel cyber-border">
-          <div className="w-24 h-24 border-2 border-slate-700 rounded-full flex items-center justify-center mb-6 relative bg-[var(--slate-abyssal)]/80 shadow-[0_0_30px_rgba(234,179,8,0.2)] glass-panel">
-            <div className="absolute inset-0 rounded-full border border-[var(--sovereign-gold)]/40 animate-ping"></div>
+        <div className={`absolute inset-0 bg-gradient-to-t from-[var(--slate-abyssal)] via-transparent to-[var(--slate-abyssal)]/80 ${theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'hidden' : ''}`}></div>
+        <div className={`relative z-10 flex flex-col items-center backdrop-blur-md p-10 rounded-3xl border transition-all ${
+          theme === 'CLEAN' ? 'bg-slate-50 border-slate-200' :
+          theme === 'HIGH_CONTRAST' ? 'bg-white border-black border-2' :
+          'bg-[var(--slate-abyssal)]/60 border-[var(--emerald-primary)]/20 shadow-[0_0_50px_rgba(0,0,0,0.8)] glass-panel cyber-border'
+        }`}>
+          <div className={`w-24 h-24 border rounded-full flex items-center justify-center mb-6 relative transition-all ${
+            theme === 'CLEAN' ? 'bg-white border-slate-200' :
+            theme === 'HIGH_CONTRAST' ? 'bg-white border-black border-2' :
+            'bg-[var(--slate-abyssal)]/80 border-slate-700 shadow-[0_0_30px_rgba(234,179,8,0.2)] glass-panel'
+          }`}>
+            <div className={`absolute inset-0 rounded-full border animate-ping ${theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'hidden' : 'border-[var(--sovereign-gold)]/40'}`}></div>
             <img src="/well-tegra-logo.jpg" alt="Well-Tegra Logo" className="w-16 h-16 object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
             <div className="w-2 h-2 bg-[var(--sovereign-gold)] rounded-full animate-pulse hidden absolute"></div>
           </div>
-          <h3 className="text-3xl font-black uppercase tracking-[0.5em] text-[var(--sovereign-gold)] mb-2 drop-shadow-[0_0_10px_rgba(234,179,8,0.5)] text-glow-gold">System Standby</h3>
-          <p className="text-[10px] font-terminal text-slate-300 uppercase tracking-widest bg-[var(--slate-abyssal)]/80 px-4 py-1.5 rounded border border-slate-700/50 glass-panel">Awaiting Module Engagement // Zero Active Feeds</p>
+          <h3 className={`text-3xl font-black uppercase tracking-[0.5em] mb-2 transition-all ${
+            theme === 'CLEAN' ? 'text-slate-900' :
+            theme === 'HIGH_CONTRAST' ? 'text-black' :
+            'text-[var(--sovereign-gold)] drop-shadow-[0_0_10px_rgba(234,179,8,0.5)] text-glow-gold'
+          }`}>System Standby</h3>
+          <p className={`text-[10px] font-terminal uppercase tracking-widest px-4 py-1.5 rounded border transition-all ${
+            theme === 'CLEAN' ? 'bg-white text-slate-500 border-slate-200' :
+            theme === 'HIGH_CONTRAST' ? 'bg-white text-black border-black border-2' :
+            'bg-[var(--slate-abyssal)]/80 text-slate-300 border-slate-700/50 glass-panel'
+          }`}>Awaiting Module Engagement // Zero Active Feeds</p>
         </div>
       </div>
     );
@@ -126,7 +147,11 @@ const SovereignStage: React.FC<StageProps> = ({ engagedModules, selectedTargetId
     : 'grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3'; // Adjusted for 3 columns on larger screens
 
   return (
-    <div className={`grid ${gridClass} gap-6 transition-all duration-700 h-fit pb-12`}>
+    <div className={`grid ${gridClass} gap-6 transition-all duration-700 h-fit pb-12 ${
+      theme === 'CLEAN' ? 'bg-slate-50' : 
+      theme === 'HIGH_CONTRAST' ? 'bg-white' : 
+      ''
+    }`}>
       
       {engagedModules.missionControl && (
         <div className="col-span-full">
@@ -258,12 +283,13 @@ const SovereignStage: React.FC<StageProps> = ({ engagedModules, selectedTargetId
         </div>
       )}
       
-      {engagedModules.ghostSync && <GhostSync />}
+      {engagedModules.ghostSync && <GhostSync wellId={selectedWellId} />}
       {engagedModules.traumaNode && (
         <div className={isTraumaNodeFocused ? "col-span-full h-[800px]" : "h-[600px]"}>
           <TraumaNode 
             isFocused={isTraumaNodeFocused} 
             onToggleFocus={() => setIsTraumaNodeFocused(!isTraumaNodeFocused)} 
+            wellId={selectedWellId}
           />
         </div>
       )}
@@ -301,12 +327,6 @@ const SovereignStage: React.FC<StageProps> = ({ engagedModules, selectedTargetId
       {engagedModules.forensicDeltaSummary && (
         <div className="col-span-full">
           <ForensicDeltaSummary selectedWellId={selectedWellId} />
-        </div>
-      )}
-
-      {engagedModules.ndrCrawler && (
-        <div className="col-span-full"> {/* Allow NDRCrawler to take full width */}
-          <NDRCrawler />
         </div>
       )}
 

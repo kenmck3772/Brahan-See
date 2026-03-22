@@ -15,19 +15,23 @@ interface SyncMonitorChartProps {
   ghostLabel: string;
   validationError: string | null;
   offset: number;
+  unit: 'METERS' | 'FEET';
+  unitLabel: string;
+  convertToDisplay: (meters: number) => number;
   anomalies?: SyncAnomaly[];
   onToggleSignal: (dataKey: string) => void;
   onAnomalyClick?: (anomaly: SyncAnomaly) => void;
   selectedAnomalyId?: string | null;
 }
 
-const CustomTooltip: React.FC<any> = ({ active, payload, label }) => {
+const CustomTooltip: React.FC<any> = ({ active, payload, label, unitLabel, convertToDisplay }) => {
   if (active && payload && payload.length) {
+    const displayDepth = convertToDisplay ? convertToDisplay(label) : label;
     return (
       <div className="glass-panel p-3 border border-[var(--emerald-primary)]/30 bg-slate-950/90 shadow-[0_0_20px_rgba(0,0,0,0.5)] cyber-border min-w-[140px] animate-in zoom-in-95 duration-200">
         <div className="flex items-center justify-between border-b border-[var(--emerald-primary)]/20 pb-1.5 mb-2">
           <span className="text-[10px] font-black text-[var(--emerald-primary)] uppercase tracking-widest text-glow-emerald">Depth_Locus</span>
-          <span className="text-[10px] font-terminal font-black text-white">{label.toFixed(2)}m</span>
+          <span className="text-[10px] font-terminal font-black text-white">{displayDepth.toFixed(2)}{unitLabel}</span>
         </div>
         <div className="space-y-1.5">
           {payload.map((item: any, index: number) => (
@@ -57,6 +61,9 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
   ghostLabel, 
   validationError,
   offset,
+  unit,
+  unitLabel,
+  convertToDisplay,
   anomalies = [],
   onToggleSignal,
   onAnomalyClick,
@@ -148,13 +155,13 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
         {activeDepth && (
           <div className="bg-[var(--emerald-primary)]/90 border border-emerald-400 px-3 py-1 rounded shadow-2xl animate-in fade-in slide-in-from-right-4 glass-panel cyber-border">
             <span className="text-[10px] font-terminal font-black text-slate-950 tracking-widest uppercase flex items-center">
-              <Crosshair size={10} className="mr-1.5" /> DEPTH: {activeDepth.toFixed(2)}m
+              <Crosshair size={10} className="mr-1.5" /> DEPTH: {convertToDisplay(activeDepth).toFixed(2)}{unitLabel}
             </span>
           </div>
         )}
         {activeDepth && Math.abs(offset) > 0.01 && (
           <div className="bg-orange-500/90 border border-orange-400 px-3 py-1 rounded shadow-2xl animate-in fade-in slide-in-from-right-4 delay-75 glass-panel cyber-border">
-            <span className="text-[10px] font-terminal font-black text-slate-950 tracking-widest uppercase">GHOST_REF: {(activeDepth + offset).toFixed(2)}m</span>
+            <span className="text-[10px] font-terminal font-black text-slate-950 tracking-widest uppercase">GHOST_REF: {convertToDisplay(activeDepth + offset).toFixed(2)}{unitLabel}</span>
           </div>
         )}
       </div>
@@ -213,8 +220,9 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
               fontSize={9} 
               axisLine={{stroke: 'var(--emerald-primary)', strokeOpacity: 0.2}} 
               tickLine={{stroke: 'var(--emerald-primary)', strokeOpacity: 0.2}} 
+              tickFormatter={(val) => convertToDisplay(val).toFixed(0)}
               tick={{fill: 'var(--emerald-primary)', opacity: 0.5, fontWeight: 900, fontFamily: 'JetBrains Mono'}}
-              label={{ value: 'DEPTH (m)', position: 'bottom', offset: 0, fill: 'var(--emerald-primary)', opacity: 0.3, fontSize: 8, fontWeight: 'black', letterSpacing: 2 }}
+              label={{ value: `DEPTH (${unitLabel})`, position: 'bottom', offset: 0, fill: 'var(--emerald-primary)', opacity: 0.3, fontSize: 8, fontWeight: 'black', letterSpacing: 2 }}
             />
             <YAxis 
               stroke="var(--emerald-primary)" 
@@ -225,7 +233,7 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
               label={{ value: 'GAMMA RAY (API)', angle: -90, position: 'insideLeft', fill: 'var(--emerald-primary)', opacity: 0.3, fontSize: 8, fontWeight: 'black', letterSpacing: 2 }}
             />
             <Tooltip 
-              content={<CustomTooltip />}
+              content={<CustomTooltip unitLabel={unitLabel} convertToDisplay={convertToDisplay} />}
               cursor={{ stroke: 'var(--emerald-primary)', strokeWidth: 1, strokeDasharray: '3 3', opacity: 0.5 }} 
             />
             <Legend 

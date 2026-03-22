@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { GHOST_HUNTER_MISSION } from '../constants';
 import { MissionTarget } from '../types';
+import { useTheme } from '../src/context/ThemeContext';
 
 interface MissionControlProps {
   onSelectTarget: (target: MissionTarget) => void;
@@ -16,6 +17,7 @@ interface MissionControlProps {
 
 const MissionControl: React.FC<MissionControlProps> = ({ onSelectTarget, isAnalyzing }) => {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const { theme } = useTheme();
 
   const getPriorityStyles = (priority: MissionTarget['PRIORITY']) => {
     switch (priority) {
@@ -38,31 +40,51 @@ const MissionControl: React.FC<MissionControlProps> = ({ onSelectTarget, isAnaly
   };
 
   return (
-    <div className="flex flex-col h-full bg-transparent relative overflow-hidden py-4 scanline-effect glass-panel cyber-border">
-      <div className="absolute inset-0 opacity-10 mix-blend-luminosity pointer-events-none flex items-center justify-center z-0">
+    <div className={`flex flex-col h-full bg-transparent relative overflow-hidden py-4 transition-all duration-500 ${
+      theme === 'CLEAN' ? 'bg-white' : 
+      theme === 'HIGH_CONTRAST' ? 'bg-white' : 
+      'scanline-effect glass-panel cyber-border'
+    }`}>
+      <div className={`absolute inset-0 opacity-10 mix-blend-luminosity pointer-events-none flex items-center justify-center z-0 ${theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'hidden' : ''}`}>
         <img src="/brahan-seer.jpg" alt="Brahan Seer Background" className="w-full h-full object-cover" onError={(e) => e.currentTarget.style.display = 'none'} />
       </div>
-      <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between border-b border-slate-800 pb-8 mb-8 gap-4">
+      <div className={`relative z-10 flex flex-col md:flex-row md:items-center justify-between border-b pb-8 mb-8 gap-4 transition-all ${
+        theme === 'CLEAN' ? 'border-slate-200' :
+        theme === 'HIGH_CONTRAST' ? 'border-black border-b-2' :
+        'border-slate-800'
+      }`}>
         <div className="flex items-center space-x-5">
-          <div className="p-4 bg-[var(--emerald-primary)]/10 border border-[var(--emerald-primary)]/30 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.1)] glass-panel">
-            <Radar size={32} className="text-[var(--emerald-primary)] text-glow-emerald" />
+          <div className={`p-4 rounded-xl shadow-lg border transition-all ${
+            theme === 'CLEAN' ? 'bg-slate-100 border-slate-200' :
+            theme === 'HIGH_CONTRAST' ? 'bg-white border-black border-2' :
+            'bg-[var(--emerald-primary)]/10 border-[var(--emerald-primary)]/30 shadow-[0_0_20px_rgba(16,185,129,0.1)] glass-panel'
+          }`}>
+            <Radar size={32} className={theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'text-slate-900' : 'text-[var(--emerald-primary)] text-glow-emerald'} />
           </div>
           <div>
-            <h2 className="text-3xl font-bold text-white tracking-tight text-glow-emerald">
+            <h2 className={`text-3xl font-bold tracking-tight transition-all ${
+              theme === 'CLEAN' ? 'text-slate-900' :
+              theme === 'HIGH_CONTRAST' ? 'text-black' :
+              'text-white text-glow-emerald'
+            }`}>
               {GHOST_HUNTER_MISSION.MISSION_ID}
             </h2>
-            <div className="flex items-center space-x-3 text-[10px] font-bold uppercase tracking-widest mt-1 text-slate-500">
-              <span className="flex items-center text-[var(--emerald-primary)]">
-                <span className="w-1.5 h-1.5 rounded-full bg-[var(--emerald-primary)] mr-2 animate-pulse shadow-[0_0_8px_var(--emerald-primary)]"></span>
+            <div className="flex items-center space-x-3 text-[10px] font-bold uppercase tracking-widest mt-1">
+              <span className={`flex items-center ${theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'text-slate-500' : 'text-[var(--emerald-primary)]'}`}>
+                <span className={`w-1.5 h-1.5 rounded-full mr-2 animate-pulse ${theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'bg-slate-900' : 'bg-[var(--emerald-primary)] shadow-[0_0_8px_var(--emerald-primary)]'}`}></span>
                 Active Scan
               </span>
-              <span className="h-2 w-px bg-slate-800"></span>
-              <span>Operator: {GHOST_HUNTER_MISSION.OPERATOR}</span>
+              <span className={`h-2 w-px ${theme === 'CLEAN' ? 'bg-slate-200' : theme === 'HIGH_CONTRAST' ? 'bg-black' : 'bg-slate-800'}`}></span>
+              <span className={theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'text-slate-500' : 'text-slate-500'}>Operator: {GHOST_HUNTER_MISSION.OPERATOR}</span>
             </div>
           </div>
         </div>
         <div className="text-right">
-           <div className="text-sm text-slate-400 font-mono tracking-widest bg-slate-800/50 px-4 py-2 rounded-lg border border-slate-700 glass-panel cyber-border">
+           <div className={`text-sm font-mono tracking-widest px-4 py-2 rounded-lg border transition-all ${
+             theme === 'CLEAN' ? 'bg-slate-50 text-slate-500 border-slate-200' :
+             theme === 'HIGH_CONTRAST' ? 'bg-white text-black border-black border-2' :
+             'bg-slate-800/50 text-slate-400 border-slate-700 glass-panel cyber-border'
+           }`}>
              {new Date(GHOST_HUNTER_MISSION.TIMESTAMP).toLocaleDateString()} // {new Date(GHOST_HUNTER_MISSION.TIMESTAMP).toLocaleTimeString()}
            </div>
         </div>

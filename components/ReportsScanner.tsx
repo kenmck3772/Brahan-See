@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { MOCK_TUBING_TALLY, MOCK_INTERVENTION_REPORTS } from '../constants';
 import { TubingItem, WellReport } from '../types';
+import { useTheme } from '../src/context/ThemeContext';
 
 interface ScanLogEntry {
   id: string;
@@ -21,6 +22,8 @@ interface ScanLogEntry {
 }
 
 const ReportsScanner: React.FC = () => {
+  const { theme } = useTheme();
+  const [reports, setReports] = useState<WellReport[]>(MOCK_INTERVENTION_REPORTS);
   const [selectedReport, setSelectedReport] = useState<WellReport>(MOCK_INTERVENTION_REPORTS[0]);
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
@@ -33,6 +36,40 @@ const ReportsScanner: React.FC = () => {
   const [filterType, setFilterType] = useState<string>('ALL');
   const [filterGrade, setFilterGrade] = useState<string>('ALL');
   
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsScanning(true);
+    setScanProgress(0);
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      // Simulate forensic extraction from local report
+      setTimeout(() => {
+        const newReportId = `LOCAL-${Math.random().toString(36).substring(7).toUpperCase()}`;
+        const newReport: WellReport = {
+          reportId: newReportId,
+          date: new Date().toISOString().split('T')[0],
+          eodDepth_m: 2500 + Math.random() * 500,
+          summary: `LOCAL_AUDIT: ${file.name}`,
+          opType: 'LOCAL_UPLOAD'
+        };
+
+        setReports(prev => [newReport, ...prev]);
+        setSelectedReport(newReport);
+        setIsScanning(false);
+        setScanProgress(100);
+        setIsValidationComplete(false); // Reset validation for the new report
+        
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }, 1500);
+    };
+    reader.readAsText(file);
+  };
+
   // Refs for auto-scrolling the schematic
   const schematicContainerRef = useRef<HTMLDivElement>(null);
   const jointRefs = useRef<Record<number, SVGGElement | null>>({});
@@ -134,19 +171,31 @@ const ReportsScanner: React.FC = () => {
   const schematicHeight = totalLength * SCALE + 100;
 
   return (
-    <div className="flex flex-col h-full space-y-3 p-4 bg-slate-900/40 border border-emerald-900/30 rounded-lg transition-all relative overflow-hidden font-terminal">
+    <div className={`flex flex-col h-full space-y-3 p-4 border rounded-lg transition-all relative overflow-hidden font-terminal duration-500 ${
+      theme === 'CLEAN' ? 'bg-white text-slate-900 border-slate-200 shadow-sm' :
+      theme === 'HIGH_CONTRAST' ? 'bg-white text-black border-2 border-black rounded-none' :
+      'bg-slate-900/40 border-emerald-900/30 glass-panel cyber-border scanline-effect'
+    }`}>
       
       {/* Header HUD */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
         <div className="flex items-center space-x-4">
-          <div className="p-2 bg-emerald-950/80 border border-emerald-500/40 rounded shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-            <FileSearch size={20} className={isScanning ? 'animate-pulse text-orange-500' : 'text-emerald-400'} />
+          <div className={`p-2 rounded shadow-lg border transition-all ${
+            theme === 'CLEAN' ? 'bg-slate-100 border-slate-200' :
+            theme === 'HIGH_CONTRAST' ? 'bg-white border-black' :
+            'bg-emerald-950/80 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+          }`}>
+            <FileSearch size={20} className={isScanning ? 'animate-pulse text-orange-500' : (theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'text-slate-900' : 'text-emerald-400')} />
           </div>
           <div>
-            <h2 className="text-xl font-black text-emerald-400 font-terminal uppercase tracking-tighter">Report_Scanner_v1.2</h2>
+            <h2 className={`text-xl font-black font-terminal uppercase tracking-tighter transition-all ${
+              theme === 'CLEAN' ? 'text-slate-900' :
+              theme === 'HIGH_CONTRAST' ? 'text-black' :
+              'text-emerald-400'
+            }`}>Report_Scanner_v1.2</h2>
             <div className="flex items-center space-x-2">
-              <span className="text-[8px] text-emerald-800 uppercase tracking-widest font-black">Discrepancy Engine Active</span>
-              <div className="w-1 h-1 bg-emerald-500 rounded-full animate-pulse"></div>
+              <span className={`text-[8px] uppercase tracking-widest font-black ${theme === 'CLEAN' ? 'text-slate-400' : theme === 'HIGH_CONTRAST' ? 'text-black' : 'text-emerald-800'}`}>Discrepancy Engine Active</span>
+              <div className={`w-1 h-1 rounded-full animate-pulse ${theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'bg-slate-900' : 'bg-emerald-500'}`}></div>
             </div>
           </div>
         </div>
@@ -159,6 +208,21 @@ const ReportsScanner: React.FC = () => {
             <History size={14} />
             <span className="hidden sm:inline">Vault_Panel</span>
           </button>
+
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center space-x-2 px-4 py-2 bg-slate-900 border border-purple-900/50 rounded font-black text-[10px] uppercase tracking-widest text-purple-400 hover:border-purple-400 hover:bg-purple-500/5 transition-all"
+          >
+            <HardDriveDownload size={14} />
+            <span className="hidden sm:inline">Upload_Local</span>
+          </button>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileUpload} 
+            className="hidden" 
+            accept=".csv,.txt,.pdf"
+          />
           
           <button 
             onClick={triggerScan}
@@ -184,12 +248,17 @@ const ReportsScanner: React.FC = () => {
             </div>
             
             <div className="space-y-2 overflow-y-auto max-h-48 xl:max-h-none custom-scrollbar pr-1">
-              {MOCK_INTERVENTION_REPORTS.map(report => (
+              {reports.map(report => (
                 <div 
                   key={report.reportId}
                   onClick={() => setSelectedReport(report)}
-                  className={`p-3 rounded border transition-all cursor-pointer ${selectedReport.reportId === report.reportId ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400' : 'bg-slate-900/40 border-emerald-900/20 text-emerald-900 hover:border-emerald-700'}`}
+                  className={`p-3 rounded border transition-all cursor-pointer relative overflow-hidden ${selectedReport.reportId === report.reportId ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400' : 'bg-slate-900/40 border-emerald-900/20 text-emerald-900 hover:border-emerald-700'}`}
                 >
+                  {report.opType === 'LOCAL_UPLOAD' && (
+                    <div className="absolute top-0 right-0 w-8 h-8 flex items-center justify-center bg-purple-500/10 border-l border-b border-purple-500/30 rounded-bl">
+                      <HardDriveDownload size={10} className="text-purple-400" />
+                    </div>
+                  )}
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-[10px] font-black">{report.reportId}</span>
                     <span className="text-[8px] font-mono opacity-60">{report.date}</span>

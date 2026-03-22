@@ -8,6 +8,8 @@ import {
   Waves, Gauge, RefreshCw, FileText, MoveDown
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Line, ComposedChart } from 'recharts';
+import { useUnit } from '../src/context/UnitContext';
+import { useTheme } from '../src/context/ThemeContext';
 
 interface NDRModernizationProps {
   uwi?: string;
@@ -20,6 +22,8 @@ const NDRModernization: React.FC<NDRModernizationProps> = ({
   asset = "THISTLE_ALPHA", 
   directive = "Calculate vertical discordance between 1980s drilling datum and 2026 seabed bathymetry (Scale Abyss correction)."
 }) => {
+  const { unit, convertToDisplay, unitLabel } = useUnit();
+  const { theme } = useTheme();
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [log, setLog] = useState<string[]>([]);
@@ -53,7 +57,7 @@ const NDRModernization: React.FC<NDRModernizationProps> = ({
       "[STEP 1/3] DATUM_AUDIT_SEQUENCE...",
       `>> CROSS_CORRELATION: 1980_DRILLING_DATUM vs 2026_BATHYMETRY`,
       `>> SCALE_ABYSS_CORRECTION: APPLIED`,
-      `>> DETECTED_DISCORDANCE: ${datumShift}m`,
+      `>> DETECTED_DISCORDANCE: ${convertToDisplay(datumShift).toFixed(2)}${unitLabel}`,
       "-----------------------------------------",
       "[STEP 2/3] PHYSICS_CHECK: WARREN_ROOT_MODEL...",
       `>> RECHARGE_CLOCK: ANALYZING SHUT-IN PRESSURE TRENDS`,
@@ -84,22 +88,42 @@ const NDRModernization: React.FC<NDRModernizationProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full space-y-4 p-6 bg-slate-950/40 relative font-terminal overflow-hidden border border-emerald-900/10">
+    <div className={`flex flex-col h-full space-y-4 p-6 relative font-terminal overflow-hidden border transition-all duration-500 ${
+      theme === 'CLEAN' ? 'bg-white text-slate-900 border-slate-200' :
+      theme === 'HIGH_CONTRAST' ? 'bg-white text-black border-black border-2 rounded-none' :
+      'bg-slate-950/40 border-emerald-900/10'
+    }`}>
       {/* Background HUD Decorations */}
-      <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+      <div className={`absolute top-0 right-0 p-8 opacity-5 pointer-events-none ${theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'hidden' : ''}`}>
         <Compass size={400} className="text-emerald-500 animate-spin-slow" />
       </div>
 
       <div className="flex flex-col space-y-6 max-w-7xl mx-auto w-full relative z-10 h-full">
         {/* Module Header */}
-        <div className="flex items-center justify-between border-b border-emerald-900/30 pb-4">
+        <div className={`flex items-center justify-between border-b pb-4 transition-all ${
+          theme === 'CLEAN' ? 'border-slate-200' :
+          theme === 'HIGH_CONTRAST' ? 'border-black border-b-2' :
+          'border-emerald-900/30'
+        }`}>
           <div className="flex items-center space-x-4">
-            <div className="p-3 bg-emerald-500/10 border border-emerald-500/40 rounded shadow-lg">
-              <Database size={24} className="text-emerald-400" />
+            <div className={`p-3 rounded shadow-lg transition-all border ${
+              theme === 'CLEAN' ? 'bg-slate-100 border-slate-200' :
+              theme === 'HIGH_CONTRAST' ? 'bg-white border-black border-2' :
+              'bg-emerald-500/10 border-emerald-500/40'
+            }`}>
+              <Database size={24} className={theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'text-slate-900' : 'text-emerald-400'} />
             </div>
             <div>
-              <h2 className="text-2xl font-black text-emerald-400 uppercase tracking-tighter">{">>>"} NDR_FORENSIC_MODERNIZATION</h2>
-              <p className="text-[10px] text-emerald-800 font-black uppercase tracking-[0.4em]">Target UWI: {uwi} // ASSET: {asset}</p>
+              <h2 className={`text-2xl font-black uppercase tracking-tighter transition-all ${
+                theme === 'CLEAN' ? 'text-slate-900' :
+                theme === 'HIGH_CONTRAST' ? 'text-black' :
+                'text-emerald-400'
+              }`}>{">>>"} NDR_FORENSIC_MODERNIZATION</h2>
+              <p className={`text-[10px] font-black uppercase tracking-[0.4em] transition-all ${
+                theme === 'CLEAN' ? 'text-slate-400' :
+                theme === 'HIGH_CONTRAST' ? 'text-black' :
+                'text-emerald-800'
+              }`}>Target UWI: {uwi} // ASSET: {asset}</p>
             </div>
           </div>
           <div className="flex space-x-4">
@@ -176,7 +200,9 @@ const NDRModernization: React.FC<NDRModernizationProps> = ({
                 <div className="flex-1 flex items-center justify-center relative">
                    {/* Vertical Scale */}
                    <div className="h-full w-px bg-emerald-900/20 absolute left-4 flex flex-col justify-between py-2 text-[8px] text-emerald-900">
-                     <span>8500'</span><span>8520'</span><span>8540'</span>
+                     <span>{convertToDisplay(2590.8).toFixed(0)}{unitLabel}</span>
+                     <span>{convertToDisplay(2596.9).toFixed(0)}{unitLabel}</span>
+                     <span>{convertToDisplay(2603.0).toFixed(0)}{unitLabel}</span>
                    </div>
                    
                    <div className="relative w-full h-40 flex items-center justify-center">
@@ -188,7 +214,7 @@ const NDRModernization: React.FC<NDRModernizationProps> = ({
                         <div className="absolute top-1/2 w-3/4 h-0.5 bg-red-500 shadow-[0_0_10px_#ef4444] animate-in slide-in-from-top-4 duration-1000">
                            <span className="absolute -top-4 right-0 text-[8px] font-black text-red-500 uppercase">2026_BATHYMETRY_VETO</span>
                            <div className="absolute -left-12 top-1/2 -translate-y-1/2 flex flex-col items-center">
-                              <span className="text-[10px] font-black text-red-400">{datumShift}m</span>
+                              <span className="text-[10px] font-black text-red-400">{convertToDisplay(datumShift).toFixed(2)}{unitLabel}</span>
                               <MoveDown size={14} className="text-red-500 animate-bounce" />
                            </div>
                         </div>
@@ -199,7 +225,7 @@ const NDRModernization: React.FC<NDRModernizationProps> = ({
                    <div className="flex flex-col">
                       <span className="text-[8px] text-emerald-900 uppercase font-black">Modernized_TVD</span>
                       <span className={`text-xl font-black ${showResult ? 'text-emerald-100' : 'text-emerald-900'}`}>
-                        {showResult ? (8500 + datumShift).toFixed(2) + "'" : "----.--'"}
+                        {showResult ? (convertToDisplay(2590.8 + datumShift)).toFixed(2) + unitLabel : `----.--${unitLabel}`}
                       </span>
                    </div>
                    <div className={`px-3 py-1 rounded text-[10px] font-black border ${showResult ? 'border-red-500 text-red-500 bg-red-500/10' : 'border-emerald-900 text-emerald-900'}`}>

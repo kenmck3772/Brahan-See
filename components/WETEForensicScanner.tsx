@@ -9,6 +9,7 @@ import {
   Lock, History, Download, Eye
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Line, ComposedChart } from 'recharts';
+import { useTheme } from '../src/context/ThemeContext';
 
 interface WETEScannerProps {
   uwi?: string;
@@ -17,6 +18,7 @@ interface WETEScannerProps {
 
 const WETEForensicScanner: React.FC<WETEScannerProps> = ({ uwi = "211/18-A45", scenario = 'A' }) => {
   const [isScanning, setIsScanning] = useState(false);
+  const { theme } = useTheme();
   const [scanProgress, setScanProgress] = useState(0);
   const [log, setLog] = useState<string[]>([]);
   const [showReport, setShowReport] = useState(false);
@@ -86,24 +88,44 @@ const WETEForensicScanner: React.FC<WETEScannerProps> = ({ uwi = "211/18-A45", s
   };
 
   return (
-    <div className="flex flex-col h-full space-y-4 p-6 bg-slate-950/40 relative font-terminal overflow-hidden border border-emerald-900/10">
+    <div className={`flex flex-col h-full space-y-4 p-6 relative font-terminal overflow-hidden border transition-all duration-500 ${
+      theme === 'CLEAN' ? 'bg-white border-slate-200' :
+      theme === 'HIGH_CONTRAST' ? 'bg-white border-black border-2 rounded-none' :
+      'bg-slate-950/40 border-emerald-900/10'
+    }`}>
       
       {/* Background Graphic */}
-      <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+      <div className={`absolute top-0 right-0 p-8 opacity-5 pointer-events-none ${theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'hidden' : ''}`}>
         <Scale size={400} className="text-emerald-500 animate-spin-slow" />
       </div>
 
       <div className="flex flex-col space-y-6 max-w-7xl mx-auto w-full relative z-10 h-full">
         
         {/* Module Header */}
-        <div className="flex items-center justify-between border-b border-emerald-900/30 pb-4">
+        <div className={`flex items-center justify-between border-b pb-4 transition-all ${
+          theme === 'CLEAN' ? 'border-slate-200' :
+          theme === 'HIGH_CONTRAST' ? 'border-black border-b-2' :
+          'border-emerald-900/30'
+        }`}>
           <div className="flex items-center space-x-4">
-            <div className="p-3 bg-emerald-500/10 border border-emerald-500/40 rounded shadow-lg">
-              <Zap size={24} className="text-emerald-400" />
+            <div className={`p-3 rounded-lg border transition-all ${
+              theme === 'CLEAN' ? 'bg-slate-100 border-slate-200' :
+              theme === 'HIGH_CONTRAST' ? 'bg-white border-black border-2' :
+              'bg-emerald-500/10 border-emerald-500/40 shadow-lg'
+            }`}>
+              <Zap size={24} className={theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'text-slate-900' : 'text-emerald-400'} />
             </div>
             <div>
-              <h2 className="text-2xl font-black text-emerald-400 uppercase tracking-tighter">{">>>"} WETE_FORENSIC_SCANNER</h2>
-              <p className="text-[10px] text-emerald-800 font-black uppercase tracking-[0.4em]">Auth: BRAHAN_CORE_v.92 // Source: UK_NDR</p>
+              <h2 className={`text-2xl font-black uppercase tracking-tighter transition-all ${
+                theme === 'CLEAN' ? 'text-slate-900' :
+                theme === 'HIGH_CONTRAST' ? 'text-black' :
+                'text-emerald-400'
+              }`}>{">>>"} WETE_FORENSIC_SCANNER</h2>
+              <p className={`text-[10px] font-black uppercase tracking-[0.4em] transition-all ${
+                theme === 'CLEAN' ? 'text-slate-400' :
+                theme === 'HIGH_CONTRAST' ? 'text-black' :
+                'text-emerald-800'
+              }`}>Auth: BRAHAN_CORE_v.92 // Source: UK_NDR</p>
             </div>
           </div>
           <button 

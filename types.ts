@@ -17,6 +17,7 @@ export interface TraumaData {
   metalLoss: number;
   ovality: number;
   uvIndex: number;
+  vulnerabilityIndex?: number;
 }
 
 export interface TraumaEvent {
@@ -137,7 +138,8 @@ export enum TraumaLayer {
   ICI = 'ICI',
   METAL_LOSS = 'METAL_LOSS',
   OVALITY = 'OVALITY',
-  UV_INDEX = 'UV_INDEX'
+  UV_INDEX = 'UV_INDEX',
+  VULNERABILITY_INDEX = 'VULNERABILITY_INDEX'
 }
 
 export interface NDRForensicResult {
