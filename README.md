@@ -1,20 +1,47 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Brahan Personal Terminal [WETE]
 
-# Run and deploy your AI Studio app
+A sovereign diagnostic array designed to perform "Forensic Autopsies" on offshore data artifacts. This platform integrates with the NSTA NDR API to identify bypassed pay zones, structural casing failure, and tax reclamation opportunities.
 
-This contains everything you need to run your app locally.
+## Key Features
 
-View your app in AI Studio: https://ai.studio/apps/4a9ed3dc-a466-410e-bd1a-79d66b0a1117
+- **Mission Control**: Global mission hub for tracking forensic audits across the North Sea.
+- **Ghost Sync Engine**: Real-time datum correlation array for identifying depth discrepancies.
+- **Trauma Node**: 3D structural autopsy of wellbore integrity using ambient occlusion and forensic mapping.
+- **Pulse Analyzer**: Sawtooth pressure scavenger for detecting inter-well crossflow and reservoir recharge.
+- **NDR Modernization**: Automated forensic rectification of legacy data artifacts.
+- **Personal Terminal**: Integrated CLI for file system navigation and forensic artifact inspection.
+- **Sovereign Veto Protocol**: Automated PDF audit generation with AI-driven forensic insights.
 
-## Run Locally
+## Tech Stack
 
-**Prerequisites:**  Node.js
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS
+- **Visuals**: Recharts, Lucide React, Framer Motion
+- **Backend**: Express (Sovereign Terminal Node)
+- **AI**: Google Gemini Pro (Forensic Architect)
+- **Reporting**: jsPDF (Sovereign Audit Engine)
 
+## Getting Started
 
 1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+   ```bash
+   npm install
+   ```
+
+2. Start the development terminal:
+   ```bash
+   npm run dev
+   ```
+
+3. Build for production:
+   ```bash
+   npm run build
+   ```
+
+## Forensic Directives
+
+- **Datum Shift Correction**: Rectify 1980s drilling datums against 2026 bathymetry.
+- **Mass-Energy Balance**: Verify production reporting against physics-anchored models.
+- **Structural Integrity**: Identify sub-visual casing trauma through multi-finger caliper audit.
+
+---
+*MANDATORY NSTA ATTRIBUTION: Contains information provided by the NSTA.*

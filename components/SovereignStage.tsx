@@ -1,10 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Compass, Radar, Target, Flame, Database, 
   Map as MapIcon, ChevronRight, Activity, 
   ShieldAlert, Hash, Crosshair, AlertTriangle,
-  Search, Loader2, Download // Added Loader2 and Download
+  Search, Loader2, Download, Terminal, BarChart3,
+  Ghost, Box, FileSearch, Lock, Anchor, Globe, Beaker, BookOpen, Scale
 } from 'lucide-react';
 import { MissionTarget, ForensicWell } from '../types';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, AreaChart, Area } from 'recharts';
@@ -24,6 +25,7 @@ import WETEForensicScanner from './WETEForensicScanner';
 import ForensicDeltaMap from './ForensicDeltaMap';
 import ForensicDeltaSummary from './ForensicDeltaSummary';
 import TimeTravelSlider from './TimeTravelSlider';
+import BrahanPersonalTerminal from './BrahanPersonalTerminal';
 import { MOCK_WELLS } from '../constants';
 import { useTheme } from '../src/context/ThemeContext';
 
@@ -60,6 +62,56 @@ const SovereignStage: React.FC<StageProps> = ({ engagedModules, selectedTargetId
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
   const [isTraumaNodeFocused, setIsTraumaNodeFocused] = useState(false);
   const [selectedWellId, setSelectedWellId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
+
+  const prevEngagedRef = useRef(engagedModules);
+
+  const MODULE_METADATA = [
+    { id: 'missionControl', label: 'Mission Control', icon: <Compass size={14} /> },
+    { id: 'globalScavenger', label: 'Global Scavenger', icon: <Radar size={14} /> },
+    { id: 'scaleAbyss', label: 'Scale Abyss', icon: <Compass size={14} /> },
+    { id: 'phantomSteel', label: 'Phantom Steel', icon: <Target size={14} /> },
+    { id: 'chemicalRot', label: 'Chemical Rot', icon: <Flame size={14} /> },
+    { id: 'ghostReserve', label: 'Ghost Reserve', icon: <Database size={14} /> },
+    { id: 'ghostSync', label: 'Ghost Sync', icon: <Activity size={14} /> },
+    { id: 'traumaNode', label: 'Trauma Node', icon: <ShieldAlert size={14} /> },
+    { id: 'pulseAnalyzer', label: 'Pulse Analyzer', icon: <Activity size={14} /> },
+    { id: 'reportsScanner', label: 'Reports Scanner', icon: <Search size={14} /> },
+    { id: 'vault', label: 'Sovereign Vault', icon: <Database size={14} /> },
+    { id: 'legacyRecovery', label: 'Legacy Recovery', icon: <Activity size={14} /> },
+    { id: 'norwaySovereign', label: 'Norway Sovereign', icon: <ShieldAlert size={14} /> },
+    { id: 'chanonryProtocol', label: 'Chanonry Protocol', icon: <ShieldAlert size={14} /> },
+    { id: 'protocolManual', label: 'Protocol Manual', icon: <ShieldAlert size={14} /> },
+    { id: 'ndrModernization', label: 'NDR Modernization', icon: <Activity size={14} /> },
+    { id: 'cerberusSimulator', label: 'Cerberus Simulator', icon: <ShieldAlert size={14} /> },
+    { id: 'weteForensicScanner', label: 'WETE Forensic Scanner', icon: <Search size={14} /> },
+    { id: 'forensicDeltaMap', label: 'Forensic Delta Map', icon: <MapIcon size={14} /> },
+    { id: 'forensicDeltaSummary', label: 'Forensic Delta Summary', icon: <BarChart3 size={14} /> },
+    { id: 'timeTravelSlider', label: 'Time-Travel Slider', icon: <Activity size={14} /> },
+    { id: 'brahanPersonalTerminal', label: 'Personal Terminal', icon: <Terminal size={14} /> },
+  ];
+
+  // Sync activeTab with engagedModules
+  useEffect(() => {
+    const engagedKeys = Object.keys(engagedModules).filter(k => engagedModules[k]);
+    const prevEngagedKeys = Object.keys(prevEngagedRef.current).filter(k => prevEngagedRef.current[k]);
+    
+    // Find if a new module was just engaged
+    const added = engagedKeys.find(k => !prevEngagedKeys.includes(k));
+    
+    if (added) {
+      setActiveTab(added);
+    } else if (engagedKeys.length === 0) {
+      setActiveTab(null);
+    } else if (activeTab && !engagedModules[activeTab]) {
+      // If current tab was closed, switch to another one
+      setActiveTab(engagedKeys[0] || null);
+    } else if (!activeTab && engagedKeys.length > 0) {
+      setActiveTab(engagedKeys[0]);
+    }
+    
+    prevEngagedRef.current = engagedModules;
+  }, [engagedModules, activeTab]);
 
   // Placeholder for collected audit data (this would ideally come from context or props)
   const mockAuditData: AuditData = {
@@ -147,194 +199,222 @@ const SovereignStage: React.FC<StageProps> = ({ engagedModules, selectedTargetId
     : 'grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3'; // Adjusted for 3 columns on larger screens
 
   return (
-    <div className={`grid ${gridClass} gap-6 transition-all duration-700 h-fit pb-12 ${
+    <div className={`flex flex-col transition-all duration-700 h-fit pb-12 ${
       theme === 'CLEAN' ? 'bg-slate-50' : 
       theme === 'HIGH_CONTRAST' ? 'bg-white' : 
       ''
     }`}>
       
-      {engagedModules.missionControl && (
-        <div className="col-span-full">
-           <MissionControl onSelectTarget={onSelectTarget} isAnalyzing={false} />
-        </div>
-      )}
+      {/* Tab Navigation */}
+      <div className="flex items-center space-x-1 overflow-x-auto no-scrollbar border-b border-emerald-900/20 mb-6 px-2">
+        {MODULE_METADATA.filter(m => engagedModules[m.id]).map(module => (
+          <button
+            key={module.id}
+            onClick={() => setActiveTab(module.id)}
+            className={`flex items-center space-x-2 px-4 py-3 transition-all whitespace-nowrap border-b-2 ${
+              activeTab === module.id 
+                ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5' 
+                : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+            }`}
+          >
+            <span className={activeTab === module.id ? 'text-emerald-400' : 'text-slate-600'}>
+              {module.icon}
+            </span>
+            <span className="text-[10px] font-black uppercase tracking-widest">{module.label}</span>
+          </button>
+        ))}
+      </div>
 
-      {engagedModules.globalScavenger && (
-        <div className="h-96 bg-[var(--slate-abyssal)]/40 border border-[var(--emerald-primary)]/20 rounded-2xl flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-500 glass-panel cyber-border scanline-effect">
-          <div className="p-4 bg-slate-900/50 border-b border-[var(--emerald-primary)]/20 flex items-center justify-between glass-panel">
-            <div className="flex items-center space-x-3">
-              <MapIcon size={16} className="text-[var(--emerald-primary)] text-glow-emerald" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-white">Global Scavenger // OSINT</span>
-            </div>
-            <div className="flex space-x-1">
-               <div className="w-1.5 h-1.5 rounded-full bg-[var(--emerald-primary)] animate-pulse shadow-[0_0_8px_var(--emerald-primary)]"></div>
-            </div>
+      <div className="grid grid-cols-1 gap-6">
+        {activeTab === 'missionControl' && (
+          <div className="col-span-full">
+            <MissionControl onSelectTarget={onSelectTarget} isAnalyzing={false} />
           </div>
-          <div className="flex-1 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 relative">
-             <div className="absolute inset-0 flex items-center justify-center border-4 border-[var(--emerald-primary)]/5">
-                <Crosshair size={100} className="text-[var(--emerald-primary)]/20" />
-             </div>
-             <div className="absolute bottom-4 left-4 p-3 bg-slate-950/80 border border-[var(--emerald-primary)]/30 rounded-lg glass-panel">
-                <span className="text-[8px] font-mono text-[var(--emerald-primary)] block">LAT: 58.12.44N</span>
-                <span className="text-[8px] font-mono text-[var(--emerald-primary)] block">LON: 01.33.22E</span>
-             </div>
-          </div>
-        </div>
-      )}
+        )}
 
-      {engagedModules.scaleAbyss && (
-        <div className="h-96 bg-[var(--slate-abyssal)]/40 border border-[var(--emerald-primary)]/20 rounded-2xl flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-500 glass-panel cyber-border scanline-effect">
-          <div className="p-4 bg-slate-900/50 border-b border-[var(--emerald-primary)]/20 flex items-center justify-between glass-panel">
-            <div className="flex items-center space-x-3">
-              <Compass size={16} className="text-[var(--sovereign-gold)] text-glow-gold" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-white">Scale Abyss // 4.26m Error</span>
+        {activeTab === 'globalScavenger' && (
+          <div className="h-96 bg-[var(--slate-abyssal)]/40 border border-[var(--emerald-primary)]/20 rounded-2xl flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-500 glass-panel cyber-border scanline-effect">
+            <div className="p-4 bg-slate-900/50 border-b border-[var(--emerald-primary)]/20 flex items-center justify-between glass-panel">
+              <div className="flex items-center space-x-3">
+                <MapIcon size={16} className="text-[var(--emerald-primary)] text-glow-emerald" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-white">Global Scavenger // OSINT</span>
+              </div>
+              <div className="flex space-x-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-[var(--emerald-primary)] animate-pulse shadow-[0_0_8px_var(--emerald-primary)]"></div>
+              </div>
             </div>
-            <span className="text-[8px] font-black px-2 py-1 bg-[var(--sovereign-gold)]/10 text-[var(--sovereign-gold)] border border-[var(--sovereign-gold)]/30 rounded shadow-[0_0_10px_rgba(234,179,8,0.2)] glass-panel">Veto Active</span>
+            <div className="flex-1 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 relative">
+              <div className="absolute inset-0 flex items-center justify-center border-4 border-[var(--emerald-primary)]/5">
+                  <Crosshair size={100} className="text-[var(--emerald-primary)]/20" />
+              </div>
+              <div className="absolute bottom-4 left-4 p-3 bg-slate-950/80 border border-[var(--emerald-primary)]/30 rounded-lg glass-panel">
+                  <span className="text-[8px] font-mono text-[var(--emerald-primary)] block">LAT: 58.12.44N</span>
+                  <span className="text-[8px] font-mono text-[var(--emerald-primary)] block">LON: 01.33.22E</span>
+              </div>
+            </div>
           </div>
-          <div className="flex-1 p-4">
-             <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={mockSubsidenceData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--emerald-primary)" opacity={0.1} />
-                  <XAxis dataKey="dist" hide />
-                  <YAxis stroke="var(--emerald-primary)" opacity={0.4} fontSize={8} />
-                  <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid var(--emerald-primary)', opacity: 0.8 }} />
-                  <Line type="step" dataKey="error" stroke="var(--alert-red)" strokeWidth={3} dot={{ r: 4, fill: 'var(--alert-red)' }} />
-                  <Line type="monotone" dataKey="nominal" stroke="var(--emerald-primary)" strokeDasharray="5 5" opacity={0.5} />
-                </LineChart>
-             </ResponsiveContainer>
-          </div>
-        </div>
-      )}
+        )}
 
-      {engagedModules.phantomSteel && (
-        <div className="h-96 bg-[var(--slate-abyssal)]/40 border border-[var(--emerald-primary)]/20 rounded-2xl flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-500 glass-panel cyber-border scanline-effect">
-          <div className="p-4 bg-slate-900/50 border-b border-[var(--emerald-primary)]/20 flex items-center justify-between glass-panel">
-            <div className="flex items-center space-x-3">
-              <Target size={16} className="text-[var(--alert-red)] text-glow-red" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-white">Phantom Steel // Echo Pulse</span>
+        {activeTab === 'scaleAbyss' && (
+          <div className="h-96 bg-[var(--slate-abyssal)]/40 border border-[var(--emerald-primary)]/20 rounded-2xl flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-500 glass-panel cyber-border scanline-effect">
+            <div className="p-4 bg-slate-900/50 border-b border-[var(--emerald-primary)]/20 flex items-center justify-between glass-panel">
+              <div className="flex items-center space-x-3">
+                <Compass size={16} className="text-[var(--sovereign-gold)] text-glow-gold" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-white">Scale Abyss // 4.26m Error</span>
+              </div>
+              <span className="text-[8px] font-black px-2 py-1 bg-[var(--sovereign-gold)]/10 text-[var(--sovereign-gold)] border border-[var(--sovereign-gold)]/30 rounded shadow-[0_0_10px_rgba(234,179,8,0.2)] glass-panel">Veto Active</span>
             </div>
-            <Activity size={14} className="text-[var(--alert-red)] animate-bounce" />
+            <div className="flex-1 p-4">
+              <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={mockSubsidenceData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--emerald-primary)" opacity={0.1} />
+                    <XAxis dataKey="dist" hide />
+                    <YAxis stroke="var(--emerald-primary)" opacity={0.4} fontSize={8} />
+                    <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid var(--emerald-primary)', opacity: 0.8 }} />
+                    <Line type="step" dataKey="error" stroke="var(--alert-red)" strokeWidth={3} dot={{ r: 4, fill: 'var(--alert-red)' }} />
+                    <Line type="monotone" dataKey="nominal" stroke="var(--emerald-primary)" strokeDasharray="5 5" opacity={0.5} />
+                  </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-          <div className="flex-1 p-4">
-             <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={mockPulseData}>
-                  <defs>
-                    <linearGradient id="colorPulse" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--alert-red)" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="var(--alert-red)" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="1 5" stroke="var(--emerald-primary)" opacity={0.1} />
-                  <XAxis dataKey="time" hide />
-                  <YAxis stroke="var(--emerald-primary)" opacity={0.4} fontSize={8} />
-                  <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid var(--emerald-primary)', opacity: 0.8 }} />
-                  <Area type="monotone" dataKey="pressure" stroke="var(--alert-red)" fillOpacity={1} fill="url(#colorPulse)" strokeWidth={2} />
-                </AreaChart>
-             </ResponsiveContainer>
-          </div>
-        </div>
-      )}
+        )}
 
-      {engagedModules.chemicalRot && (
-        <div className="h-96 bg-[var(--slate-abyssal)]/40 border border-[var(--emerald-primary)]/20 rounded-2xl flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-500 glass-panel cyber-border scanline-effect">
-          <div className="p-4 bg-slate-900/50 border-b border-[var(--emerald-primary)]/20 flex items-center justify-between glass-panel">
-            <div className="flex items-center space-x-3">
-              <Flame size={16} className="text-orange-500" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-white">Chemical Rot // Casing Pressure</span>
+        {activeTab === 'phantomSteel' && (
+          <div className="h-96 bg-[var(--slate-abyssal)]/40 border border-[var(--emerald-primary)]/20 rounded-2xl flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-500 glass-panel cyber-border scanline-effect">
+            <div className="p-4 bg-slate-900/50 border-b border-[var(--emerald-primary)]/20 flex items-center justify-between glass-panel">
+              <div className="flex items-center space-x-3">
+                <Target size={16} className="text-[var(--alert-red)] text-glow-red" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-white">Phantom Steel // Echo Pulse</span>
+              </div>
+              <Activity size={14} className="text-[var(--alert-red)] animate-bounce" />
+            </div>
+            <div className="flex-1 p-4">
+              <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={mockPulseData}>
+                    <defs>
+                      <linearGradient id="colorPulse" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--alert-red)" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="var(--alert-red)" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="1 5" stroke="var(--emerald-primary)" opacity={0.1} />
+                    <XAxis dataKey="time" hide />
+                    <YAxis stroke="var(--emerald-primary)" opacity={0.4} fontSize={8} />
+                    <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid var(--emerald-primary)', opacity: 0.8 }} />
+                    <Area type="monotone" dataKey="pressure" stroke="var(--alert-red)" fillOpacity={1} fill="url(#colorPulse)" strokeWidth={2} />
+                  </AreaChart>
+              </ResponsiveContainer>
             </div>
           </div>
-          <div className="flex-1 grid grid-cols-8 grid-rows-8 gap-1 p-4">
-             {Array.from({ length: 64 }).map((_, i) => (
-               <div 
-                 key={i} 
-                 className="rounded-sm border border-slate-800 transition-colors duration-1000"
-                 style={{ backgroundColor: `rgba(249, 115, 22, ${Math.random() * 0.4})` }}
-               ></div>
-             ))}
-          </div>
-        </div>
-      )}
+        )}
 
-      {engagedModules.ghostReserve && (
-        <div className="h-96 bg-[var(--slate-abyssal)]/40 border border-[var(--emerald-primary)]/20 rounded-2xl flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-500 glass-panel cyber-border scanline-effect">
-          <div className="p-4 bg-slate-900/50 border-b border-[var(--emerald-primary)]/20 flex items-center justify-between glass-panel">
-            <div className="flex items-center space-x-3">
-              <Database size={16} className="text-[var(--emerald-primary)] text-glow-emerald" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-white">Ghost Reserve // PVT Audit</span>
+        {activeTab === 'chemicalRot' && (
+          <div className="h-96 bg-[var(--slate-abyssal)]/40 border border-[var(--emerald-primary)]/20 rounded-2xl flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-500 glass-panel cyber-border scanline-effect">
+            <div className="p-4 bg-slate-900/50 border-b border-[var(--emerald-primary)]/20 flex items-center justify-between glass-panel">
+              <div className="flex items-center space-x-3">
+                <Flame size={16} className="text-orange-500" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-white">Chemical Rot // Casing Pressure</span>
+              </div>
+            </div>
+            <div className="flex-1 grid grid-cols-8 grid-rows-8 gap-1 p-4">
+              {Array.from({ length: 64 }).map((_, i) => (
+                <div 
+                  key={i} 
+                  className="rounded-sm border border-slate-800 transition-colors duration-1000"
+                  style={{ backgroundColor: `rgba(249, 115, 22, ${Math.random() * 0.4})` }}
+                ></div>
+              ))}
             </div>
           </div>
-          <div className="flex-1 p-6 flex flex-col space-y-4">
-             {[1, 2, 3].map(i => (
-               <div key={i} className="p-3 bg-slate-900/80 border border-[var(--emerald-primary)]/20 rounded-lg flex items-center justify-between glass-panel">
-                  <div className="flex items-center space-x-3">
-                    <ShieldAlert size={14} className="text-[var(--alert-red)]" />
-                    <span className="text-[9px] font-mono text-slate-400 uppercase">ANOMALY_TRX_{i}0042</span>
-                  </div>
-                  <span className="text-[10px] font-black text-[var(--emerald-primary)]">+14.2% Delta</span>
-               </div>
-             ))}
-             <div className="mt-auto p-4 bg-[var(--alert-red)]/5 border border-[var(--alert-red)]/20 rounded-xl flex items-start space-x-3">
-                <AlertTriangle size={16} className="text-[var(--alert-red)] mt-0.5" />
-                <p className="text-[9px] text-[var(--alert-red)]/80 font-bold uppercase leading-tight">
-                  Mass-balance discordance detected in Sector 4. Re-calculating PVT Reconstitution...
-                </p>
-             </div>
+        )}
+
+        {activeTab === 'ghostReserve' && (
+          <div className="h-96 bg-[var(--slate-abyssal)]/40 border border-[var(--emerald-primary)]/20 rounded-2xl flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-500 glass-panel cyber-border scanline-effect">
+            <div className="p-4 bg-slate-900/50 border-b border-[var(--emerald-primary)]/20 flex items-center justify-between glass-panel">
+              <div className="flex items-center space-x-3">
+                <Database size={16} className="text-[var(--emerald-primary)] text-glow-emerald" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-white">Ghost Reserve // PVT Audit</span>
+              </div>
+            </div>
+            <div className="flex-1 p-6 flex flex-col space-y-4">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="p-3 bg-slate-900/80 border border-[var(--emerald-primary)]/20 rounded-lg flex items-center justify-between glass-panel">
+                    <div className="flex items-center space-x-3">
+                      <ShieldAlert size={14} className="text-[var(--alert-red)]" />
+                      <span className="text-[9px] font-mono text-slate-400 uppercase">ANOMALY_TRX_{i}0042</span>
+                    </div>
+                    <span className="text-[10px] font-black text-[var(--emerald-primary)]">+14.2% Delta</span>
+                </div>
+              ))}
+              <div className="mt-auto p-4 bg-[var(--alert-red)]/5 border border-[var(--alert-red)]/20 rounded-xl flex items-start space-x-3">
+                  <AlertTriangle size={16} className="text-[var(--alert-red)] mt-0.5" />
+                  <p className="text-[9px] text-[var(--alert-red)]/80 font-bold uppercase leading-tight">
+                    Mass-balance discordance detected in Sector 4. Re-calculating PVT Reconstitution...
+                  </p>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
-      
-      {engagedModules.ghostSync && <GhostSync wellId={selectedWellId} />}
-      {engagedModules.traumaNode && (
-        <div className={isTraumaNodeFocused ? "col-span-full h-[800px]" : "h-[600px]"}>
-          <TraumaNode 
-            isFocused={isTraumaNodeFocused} 
-            onToggleFocus={() => setIsTraumaNodeFocused(!isTraumaNodeFocused)} 
-            wellId={selectedWellId}
+        )}
+        
+        {activeTab === 'ghostSync' && <GhostSync wellId={selectedWellId} />}
+        {activeTab === 'traumaNode' && (
+          <div className={isTraumaNodeFocused ? "col-span-full h-[800px]" : "h-[600px]"}>
+            <TraumaNode 
+              isFocused={isTraumaNodeFocused} 
+              onToggleFocus={() => setIsTraumaNodeFocused(!isTraumaNodeFocused)} 
+              wellId={selectedWellId}
+            />
+          </div>
+        )}
+        {activeTab === 'pulseAnalyzer' && <PulseAnalyzer />}
+        {activeTab === 'reportsScanner' && <ReportsScanner />}
+        {activeTab === 'vault' && <Vault />}
+        {activeTab === 'legacyRecovery' && <LegacyRecovery />}
+        {activeTab === 'norwaySovereign' && <NorwaySovereign />}
+        {activeTab === 'chanonryProtocol' && <ChanonryProtocol />}
+        {activeTab === 'protocolManual' && <ProtocolManual />}
+        {activeTab === 'ndrModernization' && <NDRModernization />}
+        {activeTab === 'cerberusSimulator' && <CerberusSimulator />}
+        {activeTab === 'weteForensicScanner' && <WETEForensicScanner />}
+        {activeTab === 'forensicDeltaMap' && (
+          <ForensicDeltaMap 
+            highlightedField={selectedTargetId} 
+            userLocation={userLocation} 
+            selectedWellId={selectedWellId}
+            onSelectWell={(wellId: string) => {
+              setSelectedWellId(wellId);
+              const well = MOCK_WELLS.find((w: ForensicWell) => w.id === wellId);
+              if (well) {
+                onSelectTarget({ 
+                  ASSET: well.field, 
+                  REGION: 'North Sea', 
+                  BLOCKS: [], 
+                  ANOMALY_TYPE: 'Forensic Discordance', 
+                  DATA_PORTAL: 'NSTA', 
+                  PRIORITY: well.status === 'critical' ? 'CRITICAL' : 'HIGH' 
+                });
+              }
+            }}
           />
-        </div>
-      )}
-      {engagedModules.pulseAnalyzer && <PulseAnalyzer />}
-      {engagedModules.reportsScanner && <ReportsScanner />}
-      {engagedModules.vault && <Vault />}
-      {engagedModules.legacyRecovery && <LegacyRecovery />}
-      {engagedModules.norwaySovereign && <NorwaySovereign />}
-      {engagedModules.chanonryProtocol && <ChanonryProtocol />}
-      {engagedModules.protocolManual && <ProtocolManual />}
-      {engagedModules.ndrModernization && <NDRModernization />}
-      {engagedModules.cerberusSimulator && <CerberusSimulator />}
-      {engagedModules.weteForensicScanner && <WETEForensicScanner />}
-      {engagedModules.forensicDeltaMap && (
-        <ForensicDeltaMap 
-          highlightedField={selectedTargetId} 
-          userLocation={userLocation} 
-          selectedWellId={selectedWellId}
-          onSelectWell={(wellId: string) => {
-            setSelectedWellId(wellId);
-            const well = MOCK_WELLS.find((w: ForensicWell) => w.id === wellId);
-            if (well) {
-              onSelectTarget({ 
-                ASSET: well.field, 
-                REGION: 'North Sea', 
-                BLOCKS: [], 
-                ANOMALY_TYPE: 'Forensic Discordance', 
-                DATA_PORTAL: 'NSTA', 
-                PRIORITY: well.status === 'critical' ? 'CRITICAL' : 'HIGH' 
-              });
-            }
-          }}
-        />
-      )}
-      {engagedModules.forensicDeltaSummary && (
-        <div className="col-span-full">
-          <ForensicDeltaSummary selectedWellId={selectedWellId} />
-        </div>
-      )}
+        )}
+        {activeTab === 'forensicDeltaSummary' && (
+          <div className="col-span-full">
+            <ForensicDeltaSummary selectedWellId={selectedWellId} />
+          </div>
+        )}
 
-      {engagedModules.timeTravelSlider && (
-        <div className="col-span-full">
-          <TimeTravelSlider />
-        </div>
-      )}
+        {activeTab === 'timeTravelSlider' && (
+          <div className="col-span-full">
+            <TimeTravelSlider />
+          </div>
+        )}
+
+        {activeTab === 'brahanPersonalTerminal' && (
+          <div className="col-span-full">
+            <BrahanPersonalTerminal />
+          </div>
+        )}
+      </div>
 
       {activeCount > 0 && ( // Show this only if at least one module is engaged
           <div className="col-span-full glass-panel p-6 rounded-2xl border border-[var(--emerald-primary)]/30 bg-slate-900/60 shadow-2xl animate-in zoom-in-95 duration-700 cyber-border">

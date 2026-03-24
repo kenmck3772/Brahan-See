@@ -5,7 +5,7 @@ import {
   Settings2, Power, Fingerprint, Menu, 
   Map as MapIcon, Layers, Zap, Flame, Compass, 
   Radar, Target, ShieldCheck, AlertCircle, Loader2,
-  Search, BarChart3, X,
+  Search, BarChart3, X, Terminal,
   Ghost, Box, FileSearch, Lock, Anchor, Globe, Beaker, BookOpen, Scale // NEW ICONS
 } from 'lucide-react';
 import SovereignStage from './components/SovereignStage';
@@ -143,6 +143,7 @@ const AppContent: React.FC = () => {
     forensicDeltaMap: false,
     forensicDeltaSummary: false,
     timeTravelSlider: false,
+    brahanPersonalTerminal: false,
   });
 
   useEffect(() => {
@@ -200,6 +201,7 @@ const AppContent: React.FC = () => {
     { id: 'forensicDeltaMap', label: 'Forensic Delta Map', icon: <MapIcon size={16} />, desc: 'Public vs Forensic Truth' },
     { id: 'forensicDeltaSummary', label: 'Forensic Delta Summary', icon: <BarChart3 size={16} />, desc: 'Report vs Real-Time Audit' },
     { id: 'timeTravelSlider', label: 'Time-Travel Slider', icon: <Activity size={16} />, desc: 'Temporal State Manager' },
+    { id: 'brahanPersonalTerminal', label: 'Personal Terminal', icon: <Terminal size={16} />, desc: 'Forensic CLI & FS' },
   ];
 
   // Derived system health: Nominal if all active modules are healthy.

@@ -4,7 +4,7 @@ import {
   Globe, Shield, Target, AlertCircle, 
   Map as MapIcon, ChevronRight, Activity, 
   Cpu, Radar, Compass, CornerDownRight,
-  Database, Zap, Loader2, Scan
+  Database, Zap, Loader2, Scan, X
 } from 'lucide-react';
 import { GHOST_HUNTER_MISSION } from '../constants';
 import { MissionTarget } from '../types';
@@ -17,7 +17,13 @@ interface MissionControlProps {
 
 const MissionControl: React.FC<MissionControlProps> = ({ onSelectTarget, isAnalyzing }) => {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [selectedTarget, setSelectedTarget] = useState<MissionTarget | null>(null);
   const { theme } = useTheme();
+
+  const handleTargetClick = (target: MissionTarget) => {
+    setSelectedTarget(target);
+    onSelectTarget(target);
+  };
 
   const getPriorityStyles = (priority: MissionTarget['PRIORITY']) => {
     switch (priority) {
@@ -96,9 +102,10 @@ const MissionControl: React.FC<MissionControlProps> = ({ onSelectTarget, isAnaly
             key={`${target.ASSET}-${idx}`}
             onMouseEnter={() => setHoveredId(target.ASSET)}
             onMouseLeave={() => setHoveredId(null)}
-            onClick={() => onSelectTarget(target)}
+            onClick={() => handleTargetClick(target)}
             className={`group p-8 glass-panel rounded-2xl border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between h-80 cyber-border
               ${hoveredId === target.ASSET ? 'scale-[1.01] border-[var(--emerald-primary)]/40 shadow-2xl ring-1 ring-[var(--emerald-primary)]/20' : 'border-slate-800'}
+              ${selectedTarget?.ASSET === target.ASSET ? 'ring-2 ring-[var(--emerald-primary)] border-[var(--emerald-primary)]' : ''}
               ${getPriorityStyles(target.PRIORITY)}`}
           >
             <div className="space-y-4 relative z-10">
@@ -161,6 +168,53 @@ const MissionControl: React.FC<MissionControlProps> = ({ onSelectTarget, isAnaly
           </div>
         ))}
       </div>
+
+      {selectedTarget && (
+        <div className="relative z-10 mb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="glass-panel p-8 rounded-2xl border border-[var(--emerald-primary)]/30 cyber-border">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-[var(--emerald-primary)]/10 rounded-xl border border-[var(--emerald-primary)]/30">
+                  <Target size={24} className="text-[var(--emerald-primary)] text-glow-emerald" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white uppercase tracking-widest text-glow-emerald">Associated Wells: {selectedTarget.ASSET}</h3>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em]">{selectedTarget.REGION} // {selectedTarget.ANOMALY_TYPE}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedTarget(null)}
+                className="p-2 text-slate-500 hover:text-white transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {selectedTarget.WELLS?.map((well, idx) => (
+                <div 
+                  key={well}
+                  className="p-4 bg-slate-900/50 border border-slate-800 rounded-xl hover:border-[var(--emerald-primary)]/40 transition-all group cursor-pointer"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[9px] font-mono text-slate-500 uppercase">Well_ID_{idx + 1}</span>
+                    <Activity size={12} className="text-slate-600 group-hover:text-[var(--emerald-primary)] transition-colors" />
+                  </div>
+                  <div className="text-sm font-bold text-slate-200 group-hover:text-[var(--emerald-primary)] transition-colors uppercase tracking-widest">{well}</div>
+                  <div className="mt-3 flex items-center space-x-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[var(--emerald-primary)] animate-pulse"></div>
+                    <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Telemetry_Active</span>
+                  </div>
+                </div>
+              )) || (
+                <div className="col-span-full text-center py-8 text-slate-500 uppercase tracking-widest font-bold text-xs">
+                  No specific wells identified for this asset
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="relative z-10 glass-panel p-6 rounded-2xl border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-6 cyber-border">
          <div className="flex items-center space-x-8">

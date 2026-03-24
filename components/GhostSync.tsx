@@ -8,36 +8,23 @@ import {
   Eye, Filter, Lock, Unlock, ShieldX, ShieldCheck,
   Link, Info, X, Calendar, SlidersHorizontal,
   Fingerprint, Clock, FileText, Database,
-  Download, Trash2, RefreshCw
+  Download, Trash2, RefreshCw, Upload, Sparkles
 } from 'lucide-react';
 import { MOCK_BASE_LOG, MOCK_GHOST_LOG } from '../constants';
-import { TraumaEvent } from '../types';
+import { TraumaEvent, SyncAnomaly, CasingIntegrityIssue, SignalMetadata } from '../types';
 import SyncMonitorChart from './SyncMonitorChart';
 import ProvenanceTooltip from './ProvenanceTooltip';
 import { useUnit } from '../src/context/UnitContext';
 import { useHarvester } from '../src/context/HarvesterContext';
 import { useTheme } from '../src/context/ThemeContext';
-
-export interface SignalMetadata {
-  id: string;
-  name: string;
-  color: string;
-  visible: boolean;
-}
-
-export interface SyncAnomaly {
-  id: string;
-  startDepth: number;
-  endDepth: number;
-  avgDiff: number;
-  severity: 'CRITICAL' | 'WARNING';
-  priority: 'HIGH' | 'MEDIUM' | 'LOW';
-  detectedAt: string;
-  description: string;
-  truthLevel: 'PUBLIC' | 'FORENSIC' | 'HYBRID';
-  provenance: string;
-  physicsValidation: string;
-}
+import { getForensicInsight } from '../services/geminiService';
+import SystemLogs from './ghost-sync/SystemLogs';
+import AnomalyPanel from './ghost-sync/AnomalyPanel';
+import AnomalyReport from './ghost-sync/AnomalyReport';
+import CasingIntegrityReport from './ghost-sync/CasingIntegrityReport';
+import SignalStack from './ghost-sync/SignalStack';
+import CasingIntegrityCheck from './ghost-sync/CasingIntegrityCheck';
+import ForensicControls from './ghost-sync/ForensicControls';
 
 const OFFSET_SAFE_LIMIT = 10;
 const OFFSET_HARD_LIMIT = 20;
@@ -45,18 +32,6 @@ const AUTO_SYNC_TARGET = 14.5;
 const METERS_TO_FEET = 3.28084;
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-
-export interface CasingIntegrityIssue {
-  id: string;
-  depth: number;
-  type: 'CORROSION' | 'DEFORMATION' | 'ANNULUS_LEAK' | 'THINNING';
-  severity: 'CRITICAL' | 'WARNING' | 'INFO';
-  value: number;
-  unit: string;
-  description: string;
-  timestamp: string;
-  provenance: string;
-}
 
 interface GhostSyncProps {
   wellId?: string | null;
@@ -76,6 +51,8 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
   
   // Remote Data Fetching State
   const [showFetchInput, setShowFetchInput] = useState(false);
+  const [showUploadZone, setShowUploadZone] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [remoteUrl, setRemoteUrl] = useState('');
   const [isFetching, setIsFetching] = useState(false);
   const [showConfirmFetch, setShowConfirmFetch] = useState(false);
@@ -95,54 +72,47 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
   const [isCheckingCasing, setIsCheckingCasing] = useState(false);
   const [casingCheckProgress, setCasingCheckProgress] = useState(0);
   const [selectedCasingIssue, setSelectedCasingIssue] = useState<CasingIntegrityIssue | null>(null);
+  const [forensicInsight, setForensicInsight] = useState<string | null>(null);
+  const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
   const [selectedSourceType, setSelectedSourceType] = useState<'ALL' | 'BASE_LOG' | 'GHOST_LOG' | 'REMOTE_LOGS'>(() => {
     const saved = localStorage.getItem('ghost_sync_source_type');
     return (saved as 'ALL' | 'BASE_LOG' | 'GHOST_LOG' | 'REMOTE_LOGS') || 'ALL';
   });
   const [showLogs, setShowLogs] = useState(false);
   const [logs, setLogs] = useState<TraumaEvent[]>([]);
-  const [logSeverityFilter, setLogSeverityFilter] = useState<'ALL' | 'INFO' | 'WARNING' | 'CRITICAL'>('ALL');
-  const [logStartDate, setLogStartDate] = useState<string>('');
-  const [logEndDate, setLogEndDate] = useState<string>('');
-  const logEndRef = useRef<HTMLDivElement>(null);
-
-  const filteredLogs = useMemo(() => {
-    return logs.filter(log => {
-      const matchesSeverity = logSeverityFilter === 'ALL' || log.severity === logSeverityFilter;
-      const logDate = new Date(log.timestamp);
-      
-      // Handle date filtering with UTC alignment
-      let matchesStartDate = true;
-      if (logStartDate) {
-        const start = new Date(logStartDate);
-        start.setUTCHours(0, 0, 0, 0);
-        matchesStartDate = logDate >= start;
-      }
-      
-      let matchesEndDate = true;
-      if (logEndDate) {
-        const end = new Date(logEndDate);
-        end.setUTCHours(23, 59, 59, 999);
-        matchesEndDate = logDate <= end;
-      }
-      
-      return matchesSeverity && matchesStartDate && matchesEndDate;
-    });
-  }, [logs, logSeverityFilter, logStartDate, logEndDate]);
-
-  // Auto-scroll logs to bottom
-  useEffect(() => {
-    if (showLogs && logEndRef.current) {
-      logEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [logs, showLogs]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Component mounting log
+  useEffect(() => {
+    logEvent('GhostSync_Module_Initialized', 'INFO', { wellId: wellId || 'NONE' });
+    return () => {
+      logEvent('GhostSync_Module_Terminated', 'INFO');
+    };
+  }, []);
+
+  // Well ID change log
+  useEffect(() => {
+    if (wellId) {
+      logEvent('Well_Context_Updated', 'INFO', { wellId });
+    }
+  }, [wellId]);
 
   // Persist selectedSourceType to localStorage
   useEffect(() => {
     localStorage.setItem('ghost_sync_source_type', selectedSourceType);
+    logEvent('Source_Type_Filter_Updated', 'INFO', { sourceType: selectedSourceType });
   }, [selectedSourceType]);
+
+  // View mode change log
+  useEffect(() => {
+    logEvent('View_Mode_Switched', 'INFO', { mode: viewMode });
+  }, [viewMode]);
+
+  // Theme change log
+  useEffect(() => {
+    logEvent('UI_Theme_Updated', 'INFO', { theme });
+  }, [theme]);
 
   const refreshLogs = useCallback(() => {
     try {
@@ -250,27 +220,24 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
     }
   }, [lastIngress]);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // 1. Validation for supported file formats (.las, .csv, .txt)
-    const allowedExtensions = ['.las', '.csv', '.txt'];
+  const processFile = (file: File) => {
+    // 1. Validation for supported file formats (.las, .csv)
+    const allowedExtensions = ['.las', '.csv'];
     const fileName = file.name.toLowerCase();
     const isValidExtension = allowedExtensions.some(ext => fileName.endsWith(ext));
 
     if (!isValidExtension) {
       const extension = file.name.split('.').pop()?.toUpperCase() || 'UNKNOWN';
-      setFileError(`UNSUPPORTED_FILE_TYPE: .${extension}`);
+      setFileError(`UNSUPPORTED_FILE_TYPE: .${extension} (ONLY .LAS, .CSV ACCEPTED)`);
       logEvent('Local_File_Upload_Failed', 'WARNING', { fileName: file.name, error: 'Unsupported file type' });
       setTimeout(() => setFileError(null), 5000);
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
-    // 2. Validation for file size
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      setFileError(`FILE_TOO_LARGE: MAX ${MAX_FILE_SIZE_MB}MB EXCEEDED`);
+    // 2. Validation for file size (Under 10MB)
+    if (file.size >= MAX_FILE_SIZE_BYTES) {
+      setFileError(`FILE_TOO_LARGE: MUST BE UNDER ${MAX_FILE_SIZE_MB}MB`);
       logEvent('Local_File_Upload_Failed', 'WARNING', { fileName: file.name, fileSize: file.size, error: 'File size limit exceeded' });
       setTimeout(() => setFileError(null), 5000);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -279,6 +246,7 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
 
     setFileError(null); // Clear previous errors
     setIsFetching(true);
+    setShowUploadZone(false); // Close zone on success
     
     const reader = new FileReader();
 
@@ -325,7 +293,7 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
         setIsFetching(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
         logEvent('Local_File_Upload_Completed', 'INFO', { fileName: file.name, signalId: newSignalId });
-      }, 1500);
+      }, 1800);
     };
 
     try {
@@ -336,6 +304,29 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
       setIsFetching(false);
       setTimeout(() => setFileError(null), 5000);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) processFile(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      processFile(file);
     }
   };
 
@@ -389,108 +380,6 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
       return true;
     });
   }, [detectedAnomalies, severityFilter, dateFilter]);
-
-  const anomalyTheme = useMemo(() => {
-    if (!selectedAnomaly) return null;
-    
-    const { severity, priority, truthLevel } = selectedAnomaly;
-
-    // Severity defines the "Alert" feel (Border, Glow, Header)
-    const severityMap = {
-      CRITICAL: {
-        border: 'border-red-500/50',
-        glow: 'shadow-[0_0_40px_rgba(239,68,68,0.2)]',
-        header: 'bg-red-950/40',
-        text: 'text-red-400',
-        accent: 'bg-red-500',
-        shadow: 'shadow-[0_0_8px_rgba(239,68,68,0.5)]',
-        icon: <ShieldAlert size={18} className="animate-pulse" />
-      },
-      WARNING: {
-        border: 'border-orange-500/40',
-        glow: 'shadow-[0_0_30px_rgba(249,115,22,0.15)]',
-        header: 'bg-orange-950/20',
-        text: 'text-orange-400',
-        accent: 'bg-orange-500',
-        shadow: 'shadow-[0_0_8px_rgba(249,115,22,0.5)]',
-        icon: <AlertTriangle size={18} />
-      }
-    };
-
-    // Truth Level defines the "Source" feel (Background Tint)
-    const truthMap = {
-      FORENSIC: {
-        bg: 'bg-emerald-500/5',
-        pattern: 'radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.05) 0%, transparent 70%)',
-        text: 'text-emerald-400',
-        icon: 'text-emerald-400',
-        cardHover: 'hover:border-emerald-500/40',
-        label: 'FORENSIC_TRUTH'
-      },
-      PUBLIC: {
-        bg: 'bg-cyan-500/5',
-        pattern: 'radial-gradient(circle at 50% 50%, rgba(6, 182, 212, 0.05) 0%, transparent 70%)',
-        text: 'text-cyan-400',
-        icon: 'text-cyan-400',
-        cardHover: 'hover:border-cyan-500/40',
-        label: 'PUBLIC_OPERATOR'
-      },
-      HYBRID: {
-        bg: 'bg-indigo-500/5',
-        pattern: 'radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.05) 0%, transparent 70%)',
-        text: 'text-indigo-400',
-        icon: 'text-indigo-400',
-        cardHover: 'hover:border-indigo-500/40',
-        label: 'HYBRID_CONSENSUS'
-      }
-    };
-
-    // Priority defines the "Urgency" feel (Icon styling)
-    const priorityMap = {
-      HIGH: {
-        iconBg: 'bg-red-500/20',
-        iconText: 'text-red-400',
-        shadow: 'shadow-red-500/20',
-        badge: 'bg-red-500/20 text-red-400 border-red-500/50'
-      },
-      MEDIUM: {
-        iconBg: 'bg-orange-500/20',
-        iconText: 'text-orange-400',
-        shadow: 'shadow-orange-500/20',
-        badge: 'bg-orange-500/20 text-orange-400 border-orange-500/50'
-      },
-      LOW: {
-        iconBg: 'bg-blue-500/20',
-        iconText: 'text-blue-400',
-        shadow: 'shadow-blue-500/20',
-        badge: 'bg-blue-500/20 text-blue-400 border-blue-500/50'
-      }
-    };
-
-    const s = severityMap[severity as keyof typeof severityMap] || severityMap.WARNING;
-    const t = truthMap[truthLevel as keyof typeof truthMap] || truthMap.HYBRID;
-    const p = priorityMap[priority as keyof typeof priorityMap] || priorityMap.LOW;
-
-    return {
-      border: s.border,
-      bg: t.bg,
-      pattern: t.pattern,
-      headerBg: s.header,
-      glow: s.glow,
-      iconBg: p.iconBg,
-      iconText: p.iconText,
-      shadow: p.shadow,
-      priorityBadge: p.badge,
-      truthText: t.text,
-      truthIcon: t.icon,
-      truthLabel: t.label,
-      severityText: s.text,
-      severityAccent: s.accent,
-      severityShadow: s.shadow,
-      severityIcon: s.icon,
-      cardHover: t.cardHover
-    };
-  }, [selectedAnomaly]);
 
   const filteredSignals = useMemo(() => {
     if (selectedSourceType === 'ALL') return signals;
@@ -749,7 +638,9 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
             unit: 'mm',
             description: 'Severe localized wall thinning detected in outer casing string. Physics audit suggests potential breakthrough within 6 months.',
             timestamp: new Date().toISOString(),
-            provenance: 'WellTegra Physics Engine v1.2'
+            provenance: 'WellTegra Physics Engine v1.2',
+            physicsValidation: 'Mass-Energy Balance Verified',
+            truthLevel: 'FORENSIC'
           },
           {
             id: `CAS-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
@@ -760,7 +651,9 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
             unit: 'psi',
             description: 'Slight pressure anomaly detected in Annulus B, suggesting potential seal degradation at the packer interface.',
             timestamp: new Date().toISOString(),
-            provenance: 'OPRED Public Records / Forensic Cross-Ref'
+            provenance: 'OPRED Public Records / Forensic Cross-Ref',
+            physicsValidation: 'Pressure Drift Analysis Confirmed',
+            truthLevel: 'PUBLIC'
           },
           {
             id: `CAS-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
@@ -771,10 +664,13 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
             unit: '%',
             description: 'Minor ovality detected in production tubing. Within safe operating limits but requires monitoring.',
             timestamp: new Date().toISOString(),
-            provenance: 'WellTegra Harvester / Forensic Audit'
+            provenance: 'WellTegra Harvester / Forensic Audit',
+            physicsValidation: 'Geometric Constraint Check Passed',
+            truthLevel: 'FORENSIC'
           }
         ];
         setCasingIssues(newIssues);
+        setSelectedCasingIssue(newIssues[0]); // Auto-select first issue
         setIsCheckingCasing(false);
         logEvent('Casing_Integrity_Scan_Completed', 'WARNING', { issuesFound: newIssues.length });
 
@@ -785,6 +681,32 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
       }
     }, 100);
   }, [logEvent]);
+
+  const generateInsight = async () => {
+    if (isGeneratingInsight) return;
+    
+    setIsGeneratingInsight(true);
+    setForensicInsight(null);
+    logEvent('Forensic_Insight_Generation_Started', 'INFO');
+
+    try {
+      // Create a concise summary of the combined data for Gemini
+      const dataSummary = combinedData
+        .filter((_, i) => i % 50 === 0) // Sample data to keep it concise
+        .map(d => `Depth: ${d.depth}, Base: ${d.baseGR}, Ghost: ${d.ghostGR}, Diff: ${d.diff.toFixed(2)}`)
+        .join(' | ');
+
+      const insight = await getForensicInsight('GHOST_SYNC', dataSummary);
+      setForensicInsight(insight || "ERROR: NO_INSIGHT_RETURNED");
+      logEvent('Forensic_Insight_Generation_Completed', 'INFO');
+    } catch (error) {
+      console.error("Failed to generate forensic insight:", error);
+      setForensicInsight("CRITICAL_ERROR: INSIGHT_BUFFER_FAILURE");
+      logEvent('Forensic_Insight_Generation_Failed', 'CRITICAL');
+    } finally {
+      setIsGeneratingInsight(false);
+    }
+  };
 
   const detectDatumShift = () => {
     setIsDetectingShift(true);
@@ -895,12 +817,12 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
 
           <div className="flex items-center gap-2">
             <button 
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => setShowUploadZone(!showUploadZone)}
               disabled={isFetching}
-              className={`flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border glass-panel hover:scale-105 active:scale-95 ${isFetching ? 'bg-purple-500/20 border-purple-500 text-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]' : 'bg-slate-900/60 border-purple-900/40 text-purple-400 hover:border-purple-400 hover:bg-purple-500/5'}`}
+              className={`flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border glass-panel hover:scale-105 active:scale-95 ${showUploadZone ? 'bg-purple-500/20 border-purple-500 text-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]' : 'bg-slate-900/60 border-purple-900/40 text-purple-400 hover:border-purple-400 hover:bg-purple-500/5'}`}
             >
-              {isFetching ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
-              <span>{isFetching ? 'Analyzing_File...' : 'Upload_Local_File'}</span>
+              {isFetching ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+              <span>{isFetching ? 'Analyzing_File...' : 'Ingest_Local_Data'}</span>
             </button>
             {fileError && (
               <div className="flex items-center space-x-2 px-3 py-2 rounded bg-red-500/10 border border-red-500/50 text-red-400 text-[8px] font-black uppercase tracking-widest animate-in slide-in-from-left-2">
@@ -914,7 +836,7 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
             ref={fileInputRef} 
             onChange={handleFileUpload} 
             className="hidden" 
-            accept=".las,.csv,.txt"
+            accept=".las,.csv"
           />
 
           <div className="flex items-center gap-3 bg-slate-900/60 border border-orange-900/40 rounded px-3 py-1.5 glass-panel cyber-border">
@@ -962,6 +884,20 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
             <Database size={14} />
             <span>System_Logs</span>
           </button>
+
+          <button 
+            onClick={generateInsight}
+            disabled={isGeneratingInsight}
+            className={`flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border glass-panel hover:scale-105 active:scale-95 ${isGeneratingInsight ? 'opacity-50' : 'bg-indigo-900/40 border-indigo-500/30 text-indigo-400 hover:border-indigo-400 hover:bg-indigo-800/50 shadow-[0_0_15px_rgba(99,102,241,0.2)]'}`}
+          >
+            {isGeneratingInsight ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+            <span>{isGeneratingInsight ? 'Generating...' : 'AI_Forensic_Insight'}</span>
+          </button>
+
+          <div className="flex items-center space-x-2 px-3 py-1 bg-slate-950/60 border border-slate-800 rounded-full glass-panel">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+            <span className="text-[8px] font-black text-emerald-500/70 uppercase tracking-widest">Black_Box_Active</span>
+          </div>
 
           <button 
             onClick={() => setViewMode(prev => prev === 'OVERLAY' ? 'DIFFERENTIAL' : 'OVERLAY')}
@@ -1028,171 +964,64 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
         </div>
       )}
 
-        {showLogs && (
-        <div className={`relative z-20 border rounded-xl p-4 animate-in fade-in slide-in-from-top-4 duration-300 transition-all duration-500 ${
-          theme === 'CLEAN' ? 'bg-white border-slate-200 shadow-lg' :
-          theme === 'HIGH_CONTRAST' ? 'bg-white border-black shadow-none' :
-          'bg-slate-950/90 border-slate-800 glass-panel cyber-border'
-        }`}>
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
-            <div className="flex items-center space-x-2">
-              <Database size={16} className="text-emerald-500" />
-              <h3 className={`text-xs font-black uppercase tracking-widest ${theme === 'CLEAN' ? 'text-slate-900' : 'text-white'}`}>System_Forensic_Audit_Trail</h3>
-              <div className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-[8px] font-black text-emerald-500 uppercase tracking-widest">
-                {filteredLogs.length} Events
-              </div>
+      {/* Local File Upload Dropzone */}
+      {showUploadZone && (
+        <div 
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`relative group bg-slate-950/80 border-2 border-dashed p-8 rounded-lg animate-in slide-in-from-top-2 duration-300 shadow-2xl glass-panel transition-all ${
+            isDragging ? 'border-purple-500 bg-purple-500/10 scale-[1.01]' : 'border-purple-900/40 hover:border-purple-500/50'
+          }`}
+        >
+          <div className="flex flex-col items-center justify-center space-y-4 pointer-events-none">
+            <div className={`p-4 rounded-full bg-slate-900 border ${isDragging ? 'border-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.4)]' : 'border-purple-900/40'}`}>
+              <Upload size={32} className={isDragging ? 'text-purple-400 animate-bounce' : 'text-purple-600'} />
+            </div>
+            <div className="text-center">
+              <p className="text-xs font-black text-purple-100 uppercase tracking-widest mb-1">
+                {isDragging ? 'Release_to_Ingest' : 'Drop_Forensic_Log_Here'}
+              </p>
+              <p className="text-[8px] font-mono text-purple-500/60 uppercase">
+                Accepted: .LAS, .CSV (Max 10MB)
+              </p>
             </div>
             
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center space-x-1 bg-slate-900/80 p-1 rounded border border-slate-800">
-                {(['ALL', 'INFO', 'WARNING', 'CRITICAL'] as const).map(sev => (
-                  <button
-                    key={sev}
-                    onClick={() => setLogSeverityFilter(sev)}
-                    className={`px-2 py-0.5 rounded text-[7px] font-black uppercase transition-all ${
-                      logSeverityFilter === sev 
-                        ? 'bg-emerald-500 text-slate-950 shadow-[0_0_10px_rgba(16,185,129,0.3)]' 
-                        : 'text-slate-500 hover:text-slate-300'
-                    }`}
-                  >
-                    {sev}
-                  </button>
-                ))}
-              </div>
-              
-              <div className="flex items-center space-x-2 bg-slate-900/80 p-1 rounded border border-slate-800">
-                <div className="flex items-center space-x-1">
-                  <Calendar size={10} className="text-slate-600" />
-                  <input 
-                    type="date" 
-                    value={logStartDate}
-                    onChange={e => setLogStartDate(e.target.value)}
-                    className="bg-transparent text-[8px] text-emerald-400 font-mono focus:outline-none w-20"
-                  />
-                </div>
-                <span className="text-slate-700 text-[8px]">→</span>
-                <div className="flex items-center space-x-1">
-                  <input 
-                    type="date" 
-                    value={logEndDate}
-                    onChange={e => setLogEndDate(e.target.value)}
-                    className="bg-transparent text-[8px] text-emerald-400 font-mono focus:outline-none w-20"
-                  />
-                </div>
-                {(logStartDate || logEndDate || logSeverityFilter !== 'ALL') && (
-                  <button 
-                    onClick={() => {
-                      setLogStartDate('');
-                      setLogEndDate('');
-                      setLogSeverityFilter('ALL');
-                    }}
-                    className="ml-1 text-slate-500 hover:text-red-400 transition-colors"
-                    title="Clear Filters"
-                  >
-                    <X size={10} />
-                  </button>
-                )}
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <button 
-                  onClick={refreshLogs}
-                  className="p-1.5 text-slate-500 hover:text-emerald-400 transition-colors bg-slate-900/50 rounded border border-slate-800"
-                  title="Refresh Logs"
-                >
-                  <RefreshCw size={14} />
-                </button>
-                <button 
-                  onClick={() => {
-                    const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `brahan_system_logs_${new Date().toISOString()}.json`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                  className="p-1.5 text-slate-500 hover:text-blue-400 transition-colors bg-slate-900/50 rounded border border-slate-800"
-                  title="Export Logs"
-                >
-                  <Download size={14} />
-                </button>
-                <button onClick={() => setShowLogs(false)} className="p-1.5 text-slate-500 hover:text-white transition-colors bg-slate-900/50 rounded border border-slate-800">
-                  <X size={14} />
-                </button>
-              </div>
+            <div className="flex items-center space-x-4 pt-2">
+              <div className="h-px w-8 bg-purple-900/30" />
+              <span className="text-[8px] font-black text-purple-900 uppercase tracking-tighter">OR</span>
+              <div className="h-px w-8 bg-purple-900/30" />
             </div>
-          </div>
 
-          <div className="max-h-80 overflow-y-auto space-y-2 custom-scrollbar pr-2 font-terminal">
-            {filteredLogs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-slate-700 border border-dashed border-slate-800 rounded bg-slate-950/20">
-                <Database size={32} className="opacity-10 mb-2" />
-                <span className="text-[10px] font-black uppercase tracking-widest italic">
-                  {logs.length === 0 ? 'No forensic events recorded' : 'No logs match current filters'}
-                </span>
-              </div>
-            ) : (
-              <>
-                {filteredLogs.map((log) => (
-                  <div key={log.id} className="group relative flex flex-col p-3 bg-slate-900/30 border-l-2 border-slate-800 rounded hover:bg-slate-900/50 transition-all hover:border-emerald-500/30">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-1.5 h-1.5 rounded-full ${
-                          log.severity === 'CRITICAL' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)] animate-pulse' :
-                          log.severity === 'WARNING' ? 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]' :
-                          'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]'
-                        }`}></div>
-                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border ${
-                          log.severity === 'CRITICAL' ? 'bg-red-500/10 border-red-500/30 text-red-500' :
-                          log.severity === 'WARNING' ? 'bg-orange-500/10 border-orange-500/30 text-orange-500' :
-                          'bg-blue-500/10 border-blue-500/30 text-blue-500'
-                        }`}>
-                          {log.severity}
-                        </span>
-                        <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{log.layer}</span>
-                        {log.depth > 0 && (
-                          <span className="text-[8px] font-black text-emerald-500/70 uppercase tracking-widest">@ {convertToDisplay(log.depth).toFixed(1)}{unitLabel}</span>
-                        )}
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-[8px] font-mono text-slate-600">{new Date(log.timestamp).toLocaleDateString()}</span>
-                        <span className="text-[8px] font-mono text-slate-400">{new Date(log.timestamp).toLocaleTimeString()}</span>
-                      </div>
-                    </div>
-                    <p className="text-[10px] font-bold text-slate-200 leading-relaxed">
-                      {log.description}
-                    </p>
-                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="text-[6px] font-mono text-slate-700 uppercase">ID: {log.id}</span>
-                    </div>
-                  </div>
-                ))}
-                <div ref={logEndRef} />
-              </>
-            )}
-          </div>
-          
-          <div className="mt-4 flex items-center justify-between pt-4 border-t border-slate-900">
-            <div className="flex items-center space-x-2 text-[7px] text-slate-600 font-black uppercase tracking-widest">
-              <Info size={10} />
-              <span>Forensic Audit Trail // Immutable Source Verification Active</span>
-            </div>
             <button 
-              onClick={() => {
-                if (window.confirm('Are you sure you want to clear the entire system audit trail? This action is irreversible.')) {
-                  localStorage.removeItem('BRAHAN_BLACK_BOX_LOGS');
-                  localStorage.removeItem('ghost_sync_logs');
-                  refreshLogs();
-                }
+              onClick={(e) => {
+                e.stopPropagation();
+                fileInputRef.current?.click();
               }}
-              className="flex items-center space-x-1.5 text-[8px] font-black uppercase text-slate-600 hover:text-red-500 transition-colors group"
+              className="pointer-events-auto px-6 py-2 bg-purple-600/20 border border-purple-500/50 text-purple-400 rounded font-black text-[10px] uppercase tracking-widest hover:bg-purple-600 hover:text-white transition-all shadow-[0_0_15px_rgba(168,85,247,0.2)]"
             >
-              <Trash2 size={10} className="group-hover:animate-bounce" />
-              <span>Purge_Audit_Trail</span>
+              Browse_Local_Buffer
             </button>
           </div>
+
+          <button 
+            onClick={() => setShowUploadZone(false)}
+            className="absolute top-2 right-2 p-1 text-slate-600 hover:text-white transition-colors"
+          >
+            <X size={14} />
+          </button>
         </div>
+      )}
+
+      {showLogs && (
+        <SystemLogs 
+          logs={logs}
+          refreshLogs={refreshLogs}
+          onClose={() => setShowLogs(false)}
+          theme={theme}
+          convertToDisplay={convertToDisplay}
+          unitLabel={unitLabel}
+        />
       )}
 
       <div className="flex-1 flex flex-col xl:flex-row gap-4 min-h-0">
@@ -1213,259 +1042,57 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
             selectedAnomalyId={selectedAnomaly?.id}
           />
 
-      {selectedAnomaly && (
-        <div 
-          className={`glass-panel rounded-lg border transition-all duration-500 overflow-hidden flex flex-col shadow-2xl ${anomalyTheme?.border} ${anomalyTheme?.bg} ${anomalyTheme?.glow} ${anomalyTheme?.shadow}`}
-          style={{ backgroundImage: anomalyTheme?.pattern }}
-        >
-          <div 
-            onClick={() => setIsAnomalyPanelOpen(!isAnomalyPanelOpen)}
-            className={`flex items-center justify-between p-4 border-b border-slate-800/50 group cursor-pointer transition-colors duration-500 ${anomalyTheme?.headerBg || 'bg-slate-900/90'}`}
-          >
-            <div className="flex items-center space-x-4">
-              <div className={`p-2 rounded-lg shadow-inner transition-all duration-500 ${anomalyTheme?.iconBg} ${anomalyTheme?.iconText} ${anomalyTheme?.shadow}`}>
-                {anomalyTheme?.severityIcon}
-              </div>
-              <div className="flex flex-col">
+          {forensicInsight && (
+            <div className="bg-slate-900/80 border border-indigo-500/30 p-4 rounded-lg animate-in slide-in-from-top-2 duration-300 shadow-2xl glass-panel cyber-border">
+              <div className="flex items-center justify-between mb-3 pb-2 border-b border-indigo-500/20">
                 <div className="flex items-center space-x-2">
-                  <span className="text-[12px] font-black uppercase tracking-widest text-white">Forensic_Anomaly_Report</span>
-                  <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase transition-all duration-300 border ${anomalyTheme?.priorityBadge}`}>
-                    {selectedAnomaly.priority}_PRIORITY
-                  </span>
-                  <div className="group/tooltip relative">
-                    <Info size={10} className="text-slate-500 cursor-help" />
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-900 border border-slate-800 rounded text-[8px] text-slate-400 invisible group-hover/tooltip:visible z-50 shadow-2xl">
-                      <div className="font-black text-emerald-400 mb-1 uppercase tracking-widest">Provenance_Trace</div>
-                      <div>Source: {selectedAnomaly.provenance}</div>
-                      <div className="mt-1">Validated: {selectedAnomaly.physicsValidation}</div>
-                      <div className="mt-1">Date: {selectedAnomaly.detectedAt}</div>
-                    </div>
-                  </div>
+                  <Sparkles size={16} className="text-indigo-400" />
+                  <h3 className="text-xs font-black uppercase tracking-widest text-indigo-100">AI_Forensic_Interpretation</h3>
                 </div>
-                <span className="text-[8px] font-mono text-slate-500 uppercase tracking-widest">Trace_ID: {selectedAnomaly.id} // Truth_Level: {anomalyTheme?.truthLabel}</span>
-              </div>
-            </div>
-            <div className="flex items-center space-x-6">
-              <div className="hidden md:flex flex-col items-end">
-                <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest">Status</span>
-                <span className={`text-[9px] font-black uppercase ${anomalyTheme?.severityText}`}>
-                  {selectedAnomaly.severity === 'CRITICAL' ? 'CRITICAL_TRAUMA' : 'FORENSIC_DRIFT'}
-                </span>
-              </div>
-              <div className="flex items-center space-x-3 border-l border-slate-800/50 pl-4">
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setIsAnomalyPanelOpen(!isAnomalyPanelOpen); }}
-                  className="p-1.5 text-slate-500 hover:text-emerald-400 transition-colors bg-slate-800/30 rounded"
-                  title={isAnomalyPanelOpen ? "Collapse" : "Expand"}
-                >
-                  <SlidersHorizontal size={16} className={`transition-transform duration-500 ${isAnomalyPanelOpen ? 'rotate-180' : ''}`} />
-                </button>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setSelectedAnomaly(null); }}
-                  className="p-1.5 text-slate-500 hover:text-red-400 transition-colors bg-slate-800/30 rounded"
-                  title="Close Report"
-                >
-                  <X size={16} />
+                <button onClick={() => setForensicInsight(null)} className="text-slate-500 hover:text-white transition-colors">
+                  <X size={14} />
                 </button>
               </div>
-            </div>
-          </div>
-
-          {isAnomalyPanelOpen && (
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6 animate-in fade-in slide-in-from-top-4 duration-500">
-              <div className={`flex flex-col space-y-1.5 p-3 bg-slate-950/40 rounded border border-slate-800/30 shadow-inner group/card transition-colors ${anomalyTheme?.cardHover}`}>
-                <div className="flex items-center justify-between">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Anomaly_ID</span>
-                  <Fingerprint size={10} className="text-emerald-500/50" />
-                </div>
-                <ProvenanceTooltip source={selectedAnomaly.provenance} validator={selectedAnomaly.physicsValidation} timestamp={selectedAnomaly.detectedAt}>
-                  <span className="text-[12px] font-terminal text-emerald-400 font-bold tracking-wider">{selectedAnomaly.id}</span>
-                </ProvenanceTooltip>
+              <div className="text-[10px] font-bold text-slate-300 leading-relaxed font-terminal whitespace-pre-wrap">
+                {forensicInsight}
               </div>
-
-              <div className={`flex flex-col space-y-1.5 p-3 bg-slate-950/40 rounded border border-slate-800/30 shadow-inner group/card transition-colors ${anomalyTheme?.cardHover}`}>
-                <div className="flex items-center justify-between">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Severity_Level</span>
-                  <ShieldAlert size={10} className={`${anomalyTheme?.severityText} opacity-50`} />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className={`w-2 h-2 rounded-full ${anomalyTheme?.severityAccent} ${selectedAnomaly.severity === 'CRITICAL' ? 'animate-pulse' : ''} ${anomalyTheme?.severityShadow}`}></div>
-                  <span className={`text-[12px] font-black uppercase ${anomalyTheme?.severityText}`}>
-                    {selectedAnomaly.severity}
-                  </span>
-                </div>
-              </div>
-
-              <div className={`flex flex-col space-y-1.5 p-3 bg-slate-950/40 rounded border border-slate-800/30 shadow-inner group/card transition-colors ${anomalyTheme?.cardHover}`}>
-                <div className="flex items-center justify-between">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Depth_Locus</span>
-                  <Target size={10} className="text-slate-500/50" />
-                </div>
-                <span className="text-[12px] font-terminal text-slate-200 font-bold tracking-wider">
-                  {convertToDisplay(selectedAnomaly.startDepth).toFixed(1)}{unitLabel} — {convertToDisplay(selectedAnomaly.endDepth).toFixed(1)}{unitLabel}
-                </span>
-              </div>
-
-              <div className={`flex flex-col space-y-1.5 p-3 bg-slate-950/40 rounded border border-slate-800/30 shadow-inner group/card transition-colors ${anomalyTheme?.cardHover}`}>
-                <div className="flex items-center justify-between">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Forensic_Delta</span>
-                  <Activity size={10} className="text-slate-500/50" />
-                </div>
-                <span className="text-[12px] font-terminal text-slate-200 font-bold tracking-wider">{selectedAnomaly.avgDiff.toFixed(2)} API</span>
-              </div>
-
-              <div className={`flex flex-col space-y-1.5 p-3 bg-slate-950/40 rounded border border-slate-800/30 shadow-inner group/card transition-colors ${anomalyTheme?.cardHover}`}>
-                <div className="flex items-center justify-between">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Truth_Level</span>
-                  <Globe2 size={10} className="text-indigo-500/50" />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Globe2 size={12} className={anomalyTheme?.truthIcon} />
-                  <span className={`text-[12px] font-black uppercase ${anomalyTheme?.truthText}`}>
-                    {selectedAnomaly.truthLevel}
-                  </span>
-                </div>
-              </div>
-
-              <div className={`flex flex-col space-y-1.5 p-3 bg-slate-950/40 rounded border border-slate-800/30 shadow-inner group/card transition-colors ${anomalyTheme?.cardHover}`}>
-                <div className="flex items-center justify-between">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Detection_Epoch</span>
-                  <Clock size={10} className="text-slate-500/50" />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Calendar size={12} className="text-slate-600" />
-                  <span className="text-[12px] font-terminal text-slate-200 font-bold">{selectedAnomaly.detectedAt}</span>
-                </div>
-              </div>
-
-              <div className={`flex flex-col space-y-1.5 p-3 bg-slate-950/40 rounded border border-slate-800/30 shadow-inner group/card transition-colors ${anomalyTheme?.cardHover}`}>
-                <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Task_Priority</span>
-                <div className="flex items-center space-x-2">
-                  {(['HIGH', 'MEDIUM', 'LOW'] as const).map(p => (
-                    <button
-                      key={p}
-                      onClick={() => updateAnomalyPriority(selectedAnomaly.id, p)}
-                      className={`px-2.5 py-1 rounded text-[8px] font-black uppercase transition-all border ${
-                      selectedAnomaly.priority === p
-                        ? p === 'HIGH' ? 'bg-red-500 border-red-400 text-white shadow-[0_0_12px_rgba(239,68,68,0.5)] scale-105' :
-                          p === 'MEDIUM' ? 'bg-orange-500 border-orange-400 text-white shadow-[0_0_12px_rgba(249,115,22,0.5)] scale-105' :
-                          'bg-blue-500 border-blue-400 text-white shadow-[0_0_12px_rgba(59,130,246,0.5)] scale-105'
-                        : 'bg-slate-900/60 border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-700'
-                    }`}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="md:col-span-2 lg:col-span-4 xl:col-span-6 pt-4 border-t border-slate-800/50">
-                <div className="flex flex-col space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <FileText size={14} className={`${anomalyTheme?.truthIcon} opacity-50`} />
-                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Forensic_Interpretation</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Database size={10} className="text-slate-600" />
-                      <span className="text-[7px] font-mono text-slate-600 uppercase tracking-widest">Source: {selectedAnomaly.provenance}</span>
-                    </div>
-                  </div>
-                  <p className={`text-[11px] text-slate-300 font-terminal leading-relaxed bg-slate-950/60 p-4 rounded border shadow-inner italic transition-all duration-500 ${anomalyTheme?.border}`}>
-                    {selectedAnomaly.description}
-                  </p>
-                  <div className="flex items-center justify-between mt-2">
-                    <div className="flex items-center space-x-4">
-                      <div className="flex items-center space-x-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]"></div>
-                        <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest">Physics_Anchored: TRUE</span>
-                      </div>
-                      <div className="flex items-center space-x-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 shadow-[0_0_5px_rgba(6,182,212,0.5)]"></div>
-                        <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest">Audit_Trail: VERIFIED</span>
-                      </div>
-                    </div>
-                    <span className="text-[7px] font-mono text-slate-600 uppercase tracking-widest">WellTegra Forensic Engine v1.2 // Forensic_Audit_Hash: {Math.random().toString(16).substr(2, 12).toUpperCase()}</span>
-                  </div>
-                </div>
+              <div className="mt-3 pt-2 border-t border-indigo-500/10 flex items-center justify-between">
+                <span className="text-[7px] font-black text-indigo-500/50 uppercase tracking-widest">Powered by Gemini 1.5 Pro // WellTegra Forensic Engine</span>
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(forensicInsight);
+                    logEvent('Forensic_Insight_Copied', 'INFO');
+                  }}
+                  className="flex items-center space-x-1 text-[8px] font-black text-indigo-400 hover:text-indigo-300 transition-colors uppercase"
+                >
+                  <Download size={10} />
+                  <span>Copy_to_Buffer</span>
+                </button>
               </div>
             </div>
           )}
-        </div>
-      )}
 
-      {selectedCasingIssue && (
-        <div 
-          className={`glass-panel rounded-lg border transition-all duration-500 overflow-hidden flex flex-col shadow-2xl mt-4 ${
-            selectedCasingIssue.severity === 'CRITICAL' ? 'border-red-500/50 bg-red-950/10 shadow-[0_0_30px_rgba(239,68,68,0.15)]' :
-            selectedCasingIssue.severity === 'WARNING' ? 'border-orange-500/50 bg-orange-950/10 shadow-[0_0_30px_rgba(249,115,22,0.15)]' :
-            'border-blue-500/50 bg-blue-950/10 shadow-[0_0_30px_rgba(59,130,246,0.15)]'
-          }`}
-        >
-          <div className="flex items-center justify-between p-4 border-b border-slate-800/50 bg-slate-900/90">
-            <div className="flex items-center space-x-4">
-              <div className={`p-2 rounded-lg shadow-inner ${
-                selectedCasingIssue.severity === 'CRITICAL' ? 'bg-red-500/20 text-red-400' :
-                selectedCasingIssue.severity === 'WARNING' ? 'bg-orange-500/20 text-orange-400' :
-                'bg-blue-500/20 text-blue-400'
-              }`}>
-                <ShieldAlert size={18} />
-              </div>
-              <div className="flex flex-col">
-                <div className="flex items-center space-x-2">
-                  <span className="text-[12px] font-black uppercase tracking-widest text-white">Casing_Integrity_Report</span>
-                  <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${
-                    selectedCasingIssue.severity === 'CRITICAL' ? 'bg-red-500/20 border-red-500/40 text-red-500' :
-                    selectedCasingIssue.severity === 'WARNING' ? 'bg-orange-500/20 border-orange-500/40 text-orange-500' :
-                    'bg-blue-500/20 border-blue-500/40 text-blue-500'
-                  }`}>
-                    {selectedCasingIssue.severity}_SEVERITY
-                  </span>
-                </div>
-                <span className="text-[8px] font-mono text-slate-500 uppercase tracking-widest">Issue_ID: {selectedCasingIssue.id} // Forensic_Audit_Active</span>
-              </div>
-            </div>
-            <button 
-              onClick={() => setSelectedCasingIssue(null)}
-              className="p-1.5 text-slate-500 hover:text-red-400 transition-colors bg-slate-800/30 rounded"
-            >
-              <X size={16} />
-            </button>
-          </div>
+          {selectedAnomaly && (
+            <AnomalyReport 
+              selectedAnomaly={selectedAnomaly}
+              setSelectedAnomaly={setSelectedAnomaly}
+              isAnomalyPanelOpen={isAnomalyPanelOpen}
+              setIsAnomalyPanelOpen={setIsAnomalyPanelOpen}
+              updateAnomalyPriority={updateAnomalyPriority}
+              convertToDisplay={convertToDisplay}
+              unitLabel={unitLabel}
+            />
+          )}
 
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="flex flex-col space-y-1.5 p-3 bg-slate-950/40 rounded border border-slate-800/30 shadow-inner">
-              <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Integrity_Type</span>
-              <span className="text-[12px] font-terminal text-emerald-400 font-bold tracking-wider">{selectedCasingIssue.type.replace(/_/g, ' ')}</span>
-            </div>
-
-            <div className="flex flex-col space-y-1.5 p-3 bg-slate-950/40 rounded border border-slate-800/30 shadow-inner">
-              <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Depth_Locus</span>
-              <span className="text-[12px] font-terminal text-slate-200 font-bold tracking-wider">{convertToDisplay(selectedCasingIssue.depth).toFixed(1)}{unitLabel}</span>
-            </div>
-
-            <div className="flex flex-col space-y-1.5 p-3 bg-slate-950/40 rounded border border-slate-800/30 shadow-inner">
-              <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Measured_Value</span>
-              <span className="text-[12px] font-terminal text-slate-200 font-bold tracking-wider">{selectedCasingIssue.value} {selectedCasingIssue.unit}</span>
-            </div>
-
-            <div className="flex flex-col space-y-1.5 p-3 bg-slate-950/40 rounded border border-slate-800/30 shadow-inner">
-              <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Provenance</span>
-              <span className="text-[12px] font-terminal text-slate-200 font-bold tracking-wider">{selectedCasingIssue.provenance}</span>
-            </div>
-
-            <div className="md:col-span-2 lg:col-span-4 pt-4 border-t border-slate-800/50">
-              <div className="flex flex-col space-y-3">
-                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Forensic_Analysis</span>
-                <p className="text-[11px] text-slate-300 font-terminal leading-relaxed bg-slate-950/60 p-4 rounded border border-slate-800/50 italic">
-                  {selectedCasingIssue.description}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-        </div>
+          {selectedCasingIssue && (
+            <CasingIntegrityReport 
+              selectedCasingIssue={selectedCasingIssue}
+              setSelectedCasingIssue={setSelectedCasingIssue}
+              convertToDisplay={convertToDisplay}
+              unitLabel={unitLabel}
+            />
+          )}
+    </div>
 
         <div className="w-full xl:w-80 flex flex-col space-y-4">
           {/* Main Control Panel with Strike Feedback */}
@@ -1752,173 +1379,23 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
             </div>
           </div>
 
-          <div className="flex-1 glass-panel p-5 rounded-lg border border-[var(--emerald-primary)]/20 bg-slate-900/40 flex flex-col overflow-hidden shadow-2xl cyber-border hover:bg-slate-900/60 transition-colors duration-300">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[10px] font-black text-[var(--emerald-primary)] uppercase tracking-widest flex items-center text-glow-emerald">
-                 <AlertTriangle size={12} className="mr-2 animate-pulse" /> Detected_Anomalies
-              </h3>
-            </div>
-            
-            <div className="space-y-3 mb-4">
-              <div className="flex flex-col space-y-2">
-                <div className="flex justify-between items-center text-[8px] font-black text-[var(--emerald-primary)]/50 uppercase tracking-widest">
-                  <div className="flex items-center space-x-2">
-                    <SlidersHorizontal size={10} className="text-[var(--emerald-primary)]/60" />
-                    <span className="text-glow-emerald">Detection_Threshold</span>
-                  </div>
-                  <span className="text-[var(--emerald-primary)] text-glow-emerald">{anomalyThreshold} API</span>
-                </div>
-                <div className="relative h-4 flex items-center">
-                  <div className="absolute inset-0 h-1 my-auto rounded-full bg-slate-800/50 pointer-events-none border border-slate-700/30"></div>
-                  <input 
-                    type="range" min="5" max="100" step="1" 
-                    value={anomalyThreshold} 
-                    onChange={e => setAnomalyThreshold(parseInt(e.target.value))}
-                    className="w-full h-1 bg-transparent appearance-none rounded-full cursor-pointer z-10 accent-[var(--emerald-primary)] transition-all" 
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <span className="text-[8px] font-black text-[var(--emerald-primary)]/50 uppercase tracking-widest block text-glow-emerald">Severity_Filter</span>
-                <div className="flex p-1 bg-slate-950/80 rounded border border-[var(--emerald-primary)]/20 glass-panel">
-                  {(['ALL', 'CRITICAL', 'WARNING'] as const).map((sev) => (
-                    <button
-                      key={sev}
-                      onClick={() => setSeverityFilter(sev)}
-                      className={`flex-1 py-1 text-[8px] font-black uppercase rounded transition-all duration-300 ${
-                        severityFilter === sev 
-                          ? 'bg-[var(--emerald-primary)] text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.5)]' 
-                          : 'text-[var(--emerald-primary)]/50 hover:text-[var(--emerald-primary)] hover:bg-[var(--emerald-primary)]/5'
-                      }`}
-                    >
-                      {sev}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <span className="text-[8px] font-black text-[var(--emerald-primary)]/50 uppercase tracking-widest block text-glow-emerald">Temporal_Filter</span>
-                <div className="flex p-1 bg-slate-950/80 rounded border border-[var(--emerald-primary)]/20 glass-panel">
-                  {(['ALL', 'LAST_7_DAYS', 'LAST_30_DAYS'] as const).map((date) => (
-                    <button
-                      key={date}
-                      onClick={() => setDateFilter(date)}
-                      className={`flex-1 py-1 text-[8px] font-black uppercase rounded transition-all duration-300 ${
-                        dateFilter === date 
-                          ? 'bg-[var(--emerald-primary)] text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.5)]' 
-                          : 'text-[var(--emerald-primary)]/50 hover:text-[var(--emerald-primary)] hover:bg-[var(--emerald-primary)]/5'
-                      }`}
-                    >
-                      {date.replace(/_/g, ' ')}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1">
-              {filteredAnomalies.length === 0 ? (
-                <div className="text-[10px] text-slate-600 font-terminal text-center py-8 uppercase tracking-widest italic opacity-50">NO ANOMALIES FOUND</div>
-              ) : (
-                filteredAnomalies.map(anomaly => (
-                  <div 
-                    key={anomaly.id}
-                    onClick={() => setSelectedAnomaly(anomaly)}
-                    className={`p-3 rounded border-l-4 cursor-pointer transition-all duration-300 glass-panel hover:bg-slate-800/60 group ${
-                      selectedAnomaly?.id === anomaly.id 
-                        ? `bg-slate-800/90 shadow-2xl cyber-border ${anomaly.severity === 'CRITICAL' ? 'border-red-500' : 'border-orange-500'}` 
-                        : `bg-slate-950/40 ${anomaly.severity === 'CRITICAL' ? 'border-red-500/30 hover:border-red-500/60' : 'border-orange-500/30 hover:border-orange-500/60'}`
-                    }`}
-                  >
-                    <div className="flex justify-between items-center mb-1">
-                      <div className="flex items-center space-x-2">
-                        <span className={`text-[10px] font-black transition-colors duration-300 ${selectedAnomaly?.id === anomaly.id ? 'text-white' : 'text-slate-300 group-hover:text-white'}`}>{anomaly.id}</span>
-                        <span className={`text-[7px] font-black px-1 rounded ${
-                          anomaly.priority === 'HIGH' ? 'bg-blue-500/20 text-blue-400' :
-                          anomaly.priority === 'MEDIUM' ? 'bg-purple-500/20 text-purple-400' :
-                          'bg-emerald-500/20 text-emerald-400'
-                        }`}>
-                          {anomaly.priority}
-                        </span>
-                      </div>
-                      <span className={`text-[8px] font-black px-1.5 py-0.5 rounded transition-all duration-300 ${anomaly.severity === 'CRITICAL' ? 'bg-red-500/20 text-red-400 shadow-[0_0_8px_rgba(239,68,68,0.2)]' : 'bg-orange-500/20 text-orange-400 shadow-[0_0_8px_rgba(249,115,22,0.2)]'}`}>
-                        {anomaly.severity}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center text-[9px] font-terminal text-slate-400">
-                      <span>{convertToDisplay(anomaly.startDepth).toFixed(1)}{unitLabel} - {convertToDisplay(anomaly.endDepth).toFixed(1)}{unitLabel}</span>
-                      <span className="flex items-center"><Calendar size={8} className="mr-1"/> {anomaly.detectedAt}</span>
-                    </div>
-
-                    {selectedAnomaly?.id === anomaly.id && (
-                      <div className="mt-3 pt-3 border-t border-slate-800/50 space-y-3 animate-in slide-in-from-top-1 duration-300">
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="flex flex-col">
-                            <span className="text-[7px] text-slate-500 uppercase font-black">Start_Depth</span>
-                            <span className="text-[10px] text-slate-200 font-mono">{convertToDisplay(anomaly.startDepth).toFixed(1)}{unitLabel}</span>
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="text-[7px] text-slate-500 uppercase font-black">End_Depth</span>
-                            <span className="text-[10px] text-slate-200 font-mono">{convertToDisplay(anomaly.endDepth).toFixed(1)}{unitLabel}</span>
-                          </div>
-                          <div className="flex flex-col col-span-2">
-                            <span className="text-[7px] text-slate-500 uppercase font-black">Avg_Deviation</span>
-                            <span className="text-[10px] text-orange-400 font-mono">{anomaly.avgDiff.toFixed(2)} API</span>
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800/30">
-                          <div className="flex flex-col">
-                            <span className="text-[7px] text-slate-500 uppercase font-black">Truth_Level</span>
-                            <span className={`text-[9px] font-black ${anomaly.truthLevel === 'FORENSIC' ? 'text-emerald-400' : 'text-blue-400'}`}>{anomaly.truthLevel}</span>
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="text-[7px] text-slate-500 uppercase font-black">Priority</span>
-                            <div className="flex items-center space-x-1 mt-0.5">
-                              {(['HIGH', 'MEDIUM', 'LOW'] as const).map(p => (
-                                <button
-                                  key={p}
-                                  onClick={(e) => { e.stopPropagation(); updateAnomalyPriority(anomaly.id, p); }}
-                                  className={`px-1.5 py-0.5 rounded text-[6px] font-black uppercase transition-all ${
-                                    anomaly.priority === p
-                                      ? p === 'HIGH' ? 'bg-blue-500 text-white' :
-                                        p === 'MEDIUM' ? 'bg-purple-500 text-white' :
-                                        'bg-emerald-500 text-white'
-                                      : 'bg-slate-800 text-slate-500 hover:bg-slate-700'
-                                  }`}
-                                >
-                                  {p}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        <p className="text-[9px] text-slate-400 leading-relaxed italic border-l-2 border-slate-800 pl-2">
-                          {anomaly.description}
-                        </p>
-
-                        <div className="flex items-center justify-between pt-1">
-                          <div className="flex items-center space-x-2">
-                            <Info size={10} className="text-slate-500" />
-                            <span className="text-[7px] text-slate-500 uppercase font-black tracking-tighter">Provenance: {anomaly.provenance}</span>
-                          </div>
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); setIsAnomalyPanelOpen(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                            className="text-[8px] font-black text-emerald-500 uppercase hover:underline"
-                          >
-                            View_Full_Report
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+          <AnomalyPanel 
+            anomalies={filteredAnomalies}
+            selectedAnomaly={selectedAnomaly}
+            setSelectedAnomaly={setSelectedAnomaly}
+            anomalyThreshold={anomalyThreshold}
+            setAnomalyThreshold={setAnomalyThreshold}
+            severityFilter={severityFilter}
+            setSeverityFilter={setSeverityFilter}
+            dateFilter={dateFilter}
+            setDateFilter={setDateFilter}
+            updateAnomalyPriority={updateAnomalyPriority}
+            isAnomalyPanelOpen={isAnomalyPanelOpen}
+            setIsAnomalyPanelOpen={setIsAnomalyPanelOpen}
+            convertToDisplay={convertToDisplay}
+            unitLabel={unitLabel}
+            theme={theme}
+          />
 
           <button className="flex items-center justify-center space-x-3 w-full py-4 bg-slate-950/90 border border-emerald-500/20 rounded-lg text-emerald-500 hover:bg-emerald-500 hover:text-slate-950 hover:border-emerald-400 transition-all group shadow-xl">
              <ShieldCheck size={18} className="group-hover:scale-110 transition-transform" />

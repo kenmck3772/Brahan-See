@@ -6,7 +6,7 @@ import {
   Cell
 } from 'recharts';
 import { Target, Crosshair, AlertOctagon, Info, AlertTriangle } from 'lucide-react';
-import { SignalMetadata, SyncAnomaly } from './GhostSync';
+import { SignalMetadata, SyncAnomaly } from '../types';
 
 interface SyncMonitorChartProps {
   combinedData: any[];

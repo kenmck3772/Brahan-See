@@ -18,6 +18,8 @@ const PulseAnalyzer: React.FC = () => {
   const [showHistoricalOverlay, setShowHistoricalOverlay] = useState(false);
   const [showHistoricalEvents, setShowHistoricalEvents] = useState(false);
   const [showLeakThresholds, setShowLeakThresholds] = useState(false);
+  const [showRawPoints, setShowRawPoints] = useState(true);
+  const [showRawDataFeed, setShowRawDataFeed] = useState(false);
   const [timeTravelYear, setTimeTravelYear] = useState(2026);
 
   // Generate historical data based on time travel year
@@ -25,11 +27,12 @@ const PulseAnalyzer: React.FC = () => {
     const yearDiff = 2026 - timeTravelYear;
     const degradationFactor = 1 - (yearDiff * 0.05); // 5% less pressure per year back
     
-    return MOCK_PRESSURE_DATA.map(d => ({
+    return MOCK_PRESSURE_DATA.map((d, index) => ({
       ...d,
       baselinePressure: d.pressure,
       pressure: Math.max(0, d.pressure * degradationFactor),
-      historicalPressure: Math.max(0, d.pressure * (degradationFactor - 0.1)) // Ghost trace for trend
+      historicalPressure: Math.max(0, d.pressure * (degradationFactor - 0.1)), // Ghost trace for trend
+      scavengedPressure: MOCK_SCAVENGED_PRESSURE_TESTS[index]?.pressure
     }));
   }, [timeTravelYear]);
 
@@ -162,6 +165,13 @@ const PulseAnalyzer: React.FC = () => {
                   <AlertCircle size={12} className={showLeakThresholds ? 'animate-pulse' : ''} />
                   <span>Leak_Thresholds</span>
                 </button>
+                <button 
+                  onClick={() => setShowRawPoints(!showRawPoints)}
+                  className={`flex items-center space-x-2 px-3 py-1.5 rounded border text-[9px] font-black uppercase transition-all glass-panel ${showRawPoints ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'bg-slate-900 border-emerald-900/30 text-emerald-900 hover:border-emerald-400'}`}
+                >
+                  <Target size={12} className={showRawPoints ? 'animate-pulse' : ''} />
+                  <span>Raw_Points</span>
+                </button>
              </div>
 
              <ResponsiveContainer width="100%" height="100%">
@@ -206,23 +216,46 @@ const PulseAnalyzer: React.FC = () => {
                   />
 
                   {/* Original Data Points - Distinct Visual Style */}
-                  <Scatter 
-                    dataKey="baselinePressure" 
-                    fill="transparent"
-                    stroke={view === 'LIVE' ? 'var(--emerald-primary)' : '#a855f7'}
-                    strokeWidth={1}
-                    shape={(props: any) => {
-                      const { cx, cy, stroke } = props;
-                      return (
-                        <g>
-                          <circle cx={cx} cy={cy} r={4} fill="none" stroke={stroke} strokeWidth={1} opacity={0.5} />
-                          <circle cx={cx} cy={cy} r={1.5} fill={stroke} />
-                          <circle cx={cx} cy={cy} r={6} fill="none" stroke={stroke} strokeWidth={0.5} opacity={0.2} />
-                        </g>
-                      );
-                    }}
-                    name="ORIGINAL_BASELINE_POINTS"
-                  />
+                  {showRawPoints && (
+                    <>
+                      <Scatter 
+                        dataKey="baselinePressure" 
+                        fill="transparent"
+                        stroke={view === 'LIVE' ? 'var(--emerald-primary)' : '#a855f7'}
+                        strokeWidth={1}
+                        shape={(props: any) => {
+                          const { cx, cy, stroke } = props;
+                          return (
+                            <g>
+                              <circle cx={cx} cy={cy} r={4} fill="none" stroke={stroke} strokeWidth={1} opacity={0.5} />
+                              <circle cx={cx} cy={cy} r={1.5} fill={stroke} />
+                              <circle cx={cx} cy={cy} r={6} fill="none" stroke={stroke} strokeWidth={0.5} opacity={0.2} />
+                            </g>
+                          );
+                        }}
+                        name="RAW_NDR_TELEMETRY_POINTS"
+                      />
+                      {view === 'SCAVENGER' && (
+                        <Scatter 
+                          dataKey="scavengedPressure" 
+                          fill="transparent"
+                          stroke="#06b6d4"
+                          strokeWidth={1}
+                          shape={(props: any) => {
+                            const { cx, cy, stroke } = props;
+                            return (
+                              <g>
+                                <rect x={cx - 3} y={cy - 3} width={6} height={6} fill="none" stroke={stroke} strokeWidth={1} opacity={0.5} />
+                                <rect x={cx - 1} y={cy - 1} width={2} height={2} fill={stroke} />
+                                <rect x={cx - 5} y={cy - 5} width={10} height={10} fill="none" stroke={stroke} strokeWidth={0.5} opacity={0.2} />
+                              </g>
+                            );
+                          }}
+                          name="HISTORICAL_SCAVENGER_POINTS"
+                        />
+                      )}
+                    </>
+                  )}
 
                   {showLeakThresholds && (
                     <>
@@ -350,7 +383,50 @@ const PulseAnalyzer: React.FC = () => {
 
         {/* Sidebar: Chronology or Diagnostic */}
         <div className="w-96 border-l border-[var(--emerald-primary)]/20 flex flex-col bg-slate-950/40 overflow-hidden glass-panel">
-          {view === 'LIVE' ? (
+          <div className="flex items-center justify-between p-4 border-b border-emerald-900/20 bg-slate-900/40">
+             <div className="flex items-center space-x-2">
+                <Database size={14} className="text-emerald-500" />
+                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Forensic_Data_Vault</span>
+             </div>
+             <button 
+               onClick={() => setShowRawDataFeed(!showRawDataFeed)}
+               className={`px-3 py-1 rounded border text-[8px] font-black uppercase transition-all ${showRawDataFeed ? 'bg-emerald-500 text-slate-950 border-emerald-400' : 'text-emerald-900 border-emerald-900/30 hover:text-emerald-400'}`}
+             >
+               {showRawDataFeed ? 'Close_Raw_Feed' : 'Open_Raw_Feed'}
+             </button>
+          </div>
+
+          {showRawDataFeed ? (
+            <div className="flex-1 flex flex-col p-4 space-y-4 overflow-hidden">
+               <div className="flex items-center justify-between">
+                  <h3 className="text-[11px] font-black text-emerald-400 uppercase tracking-widest">Raw_Pressure_Telemetry</h3>
+                  <span className="text-[8px] font-mono text-emerald-900">NODES: {MOCK_PRESSURE_DATA.length}</span>
+               </div>
+               <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1.5 pr-2">
+                  {MOCK_PRESSURE_DATA.map((d, i) => (
+                    <div key={i} className="flex items-center justify-between p-2.5 bg-slate-900/60 border border-emerald-900/20 rounded group hover:border-emerald-500/40 transition-all">
+                       <div className="flex items-center space-x-3">
+                          <span className="text-[8px] font-mono text-emerald-900">[{i.toString().padStart(2, '0')}]</span>
+                          <span className="text-[10px] font-black text-emerald-100">{d.timestamp}</span>
+                       </div>
+                       <div className="flex items-center space-x-2">
+                          <span className="text-[11px] font-terminal font-black text-emerald-400">{d.pressure.toFixed(1)}</span>
+                          <span className="text-[7px] font-black text-emerald-900 uppercase">PSI</span>
+                       </div>
+                    </div>
+                  ))}
+               </div>
+               <div className="p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
+                  <div className="flex items-center space-x-2 mb-1">
+                     <Info size={12} className="text-emerald-600" />
+                     <span className="text-[8px] font-black text-emerald-900 uppercase">Audit_Note</span>
+                  </div>
+                  <p className="text-[9px] text-emerald-100/60 font-terminal leading-relaxed uppercase">
+                     Raw telemetry data points are extracted directly from the NDR archive without forensic smoothing.
+                  </p>
+               </div>
+            </div>
+          ) : view === 'LIVE' ? (
             <div className="p-6 space-y-6 flex-1 overflow-y-auto custom-scrollbar">
               <h3 className="text-[12px] font-black text-[var(--emerald-primary)] uppercase tracking-[0.3em] mb-4 text-glow-emerald">Sovereign_Diagnosis</h3>
               <div className="p-5 bg-slate-900/50 border-l-4 rounded-r shadow-xl relative overflow-hidden glass-panel cyber-border" style={{ borderColor: analysis.color }}>

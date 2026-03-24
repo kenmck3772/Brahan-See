@@ -20,6 +20,13 @@ export interface TraumaData {
   vulnerabilityIndex?: number;
 }
 
+export interface SignalMetadata {
+  id: string;
+  name: string;
+  color: string;
+  visible: boolean;
+}
+
 export interface TraumaEvent {
   id: string;
   timestamp: string;
@@ -173,4 +180,40 @@ export interface ForensicWell {
   deviationAudit: string;
   lastAudit: string;
   forensicNote: string;
+}
+
+export interface SyncAnomaly {
+  id: string;
+  severity: 'CRITICAL' | 'WARNING';
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  startDepth: number;
+  endDepth: number;
+  avgDiff: number;
+  description: string;
+  detectedAt: string;
+  truthLevel: 'FORENSIC' | 'PUBLIC' | 'HYBRID';
+  provenance: string;
+  physicsValidation?: string;
+}
+
+export interface CasingIntegrityIssue {
+  id: string;
+  depth: number;
+  type: 'CORROSION' | 'DEFORMATION' | 'ANNULUS_LEAK' | 'THINNING' | 'WALL_THINNING' | 'OVALITY' | 'CONNECTION_LEAK' | 'CEMENT_VOID';
+  severity: 'CRITICAL' | 'WARNING' | 'INFO';
+  description: string;
+  value: number;
+  unit: string;
+  timestamp: string;
+  provenance: string;
+  physicsValidation: string;
+  truthLevel: 'FORENSIC' | 'OPERATOR' | 'PUBLIC';
+}
+
+export interface SyncStats {
+  totalPoints: number;
+  anomaliesFound: number;
+  avgDeviation: number;
+  integrityScore: number;
+  lastSync: string;
 }

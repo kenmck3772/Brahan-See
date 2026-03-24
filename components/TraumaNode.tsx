@@ -803,14 +803,25 @@ const TraumaNode: React.FC<TraumaNodeProps> = ({ isFocused: isFocusedProp, onTog
 
             // Ambient Occlusion Calculation: Compare radius with neighbors
             if (ambientOcclusion) {
+              // Sample a wider neighborhood for smoother, more impactful AO
+              const r_up2 = layerRadii[dIdx - 2]?.[fIdx] ?? r;
               const r_up = layerRadii[dIdx - 1]?.[fIdx] ?? r;
               const r_down = layerRadii[dIdx + 1]?.[fIdx] ?? r;
+              const r_down2 = layerRadii[dIdx + 2]?.[fIdx] ?? r;
+              
               const r_left = layerRadii[dIdx][(fIdx - 1 + fingerIds.length) % fingerIds.length];
               const r_right = layerRadii[dIdx][(fIdx + 1) % fingerIds.length];
               
-              const avgNeighborR = (r_up + r_down + r_left + r_right) / 4;
-              // Occlusion occurs in "valleys" (where r < avgNeighborR)
-              const occ = Math.max(0, Math.min(1, (avgNeighborR - r) / 4)); 
+              const avgNeighborR = (r_up2 + r_up + r_down + r_down2 + r_left + r_right) / 6;
+              
+              // Occlusion factor: 0 (no shadow) to 1 (full shadow)
+              // Non-linear mapping to make crevices pop
+              let occ = Math.pow(Math.max(0, Math.min(1, (avgNeighborR - r) / 6)), 0.6);
+              
+              // Depth-based darkening (simulating light falloff in deep wellbore)
+              const depthFactor = (dIdx / allDepths.length) * 0.15;
+              occ = Math.min(1, occ + depthFactor);
+              
               aoRow.push(occ);
             }
           });
@@ -840,11 +851,11 @@ const TraumaNode: React.FC<TraumaNodeProps> = ({ isFocused: isFocusedProp, onTog
           cmax: 100,
           showscale: false,
           lighting: { 
-            ambient: ambientOcclusion ? 0.15 : 0.4, 
-            diffuse: ambientOcclusion ? 0.85 : 0.6,
-            specular: 1.5,
-            roughness: 0.2,
-            fresnel: 0.4
+            ambient: ambientOcclusion ? 0.12 : 0.4, 
+            diffuse: ambientOcclusion ? 0.9 : 0.6,
+            specular: ambientOcclusion ? 2.0 : 1.5,
+            roughness: 0.15,
+            fresnel: ambientOcclusion ? 0.8 : 0.4
           },
           lightposition: { x: 1000, y: 1000, z: 500 },
           opacity: layer === TraumaLayer.STRESS ? stressSurfaceOpacity / 100 : layerOpacities[layer] / 100,
@@ -861,7 +872,9 @@ const TraumaNode: React.FC<TraumaNodeProps> = ({ isFocused: isFocusedProp, onTog
             surfacecolor: aoData,
             colorscale: [
               [0, 'rgba(0,0,0,0)'],
-              [1, 'rgba(0,0,0,0.6)']
+              [0.3, 'rgba(0,0,0,0.1)'],
+              [0.7, 'rgba(0,0,0,0.4)'],
+              [1, 'rgba(0,0,0,0.75)']
             ],
             cmin: 0,
             cmax: 1,
@@ -1099,50 +1112,50 @@ const TraumaNode: React.FC<TraumaNodeProps> = ({ isFocused: isFocusedProp, onTog
         });
       }
 
-      // Ambient Occlusion Shadow Core (Simulated)
-      if (ambientOcclusion) {
-        const coreX: number[] = [];
-        const coreY: number[] = [];
-        const coreZ: number[] = [];
-        const coreI: number[] = [];
-        const coreJ: number[] = [];
-        const coreK: number[] = [];
+        // Ambient Occlusion Shadow Core (Simulated)
+        if (ambientOcclusion) {
+          const coreX: number[] = [];
+          const coreY: number[] = [];
+          const coreZ: number[] = [];
+          const coreI: number[] = [];
+          const coreJ: number[] = [];
+          const coreK: number[] = [];
 
-        // Simple inner cylinder to create depth shadow
-        const rCore = baseRadius * 0.85;
-        allDepths.forEach((z, zIdx) => {
-          for (let i = 0; i < 16; i++) {
-            const theta = (i / 16) * 2 * Math.PI;
-            coreX.push(rCore * Math.cos(theta));
-            coreY.push(rCore * Math.sin(theta));
-            coreZ.push(z);
-          }
-        });
+          // Inner cylinder to create depth shadow and core structure
+          const rCore = baseRadius * 0.82;
+          allDepths.forEach((z, zIdx) => {
+            for (let i = 0; i < 24; i++) {
+              const theta = (i / 24) * 2 * Math.PI;
+              coreX.push(rCore * Math.cos(theta));
+              coreY.push(rCore * Math.sin(theta));
+              coreZ.push(z);
+            }
+          });
 
-        for (let zIdx = 0; zIdx < allDepths.length - 1; zIdx++) {
-          for (let i = 0; i < 16; i++) {
-            const p1 = zIdx * 16 + i;
-            const p2 = zIdx * 16 + (i + 1) % 16;
-            const p3 = (zIdx + 1) * 16 + i;
-            const p4 = (zIdx + 1) * 16 + (i + 1) % 16;
-            coreI.push(p1, p1); 
-            coreJ.push(p2, p3); 
-            coreK.push(p3, p4);
+          for (let zIdx = 0; zIdx < allDepths.length - 1; zIdx++) {
+            for (let i = 0; i < 24; i++) {
+              const p1 = zIdx * 24 + i;
+              const p2 = zIdx * 24 + (i + 1) % 24;
+              const p3 = (zIdx + 1) * 24 + i;
+              const p4 = (zIdx + 1) * 24 + (i + 1) % 24;
+              coreI.push(p1, p1); 
+              coreJ.push(p2, p3); 
+              coreK.push(p3, p4);
+            }
           }
+
+          traces.push({
+            type: 'mesh3d',
+            x: coreX, y: coreY, z: coreZ,
+            i: coreI, j: coreJ, k: coreK,
+            color: '#000000',
+            opacity: 0.5,
+            flatshading: false,
+            lighting: { ambient: 0.02, diffuse: 0.05 },
+            name: 'AO_CORE',
+            hoverinfo: 'none'
+          });
         }
-
-        traces.push({
-          type: 'mesh3d',
-          x: coreX, y: coreY, z: coreZ,
-          i: coreI, j: coreJ, k: coreK,
-          color: '#000000',
-          opacity: 0.4,
-          flatshading: false,
-          lighting: { ambient: 0.05, diffuse: 0.1 },
-          name: 'AO_CORE',
-          hoverinfo: 'none'
-        });
-      }
 
       layout = {
         paper_bgcolor: 'rgba(0,0,0,0)',

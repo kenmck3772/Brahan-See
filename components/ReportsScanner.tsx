@@ -31,6 +31,7 @@ const ReportsScanner: React.FC = () => {
   const [tally] = useState<TubingItem[]>(MOCK_TUBING_TALLY);
   const [hoveredJoint, setHoveredJoint] = useState<number | null>(null);
   const [showLogPanel, setShowLogPanel] = useState(true);
+  const [highlightDiscrepancies, setHighlightDiscrepancies] = useState(true);
   
   // Filtering State
   const [filterType, setFilterType] = useState<string>('ALL');
@@ -85,6 +86,8 @@ const ReportsScanner: React.FC = () => {
   // Derive unique filter values
   const uniqueTypes = useMemo(() => ['ALL', ...Array.from(new Set(tally.map(item => item.type)))], [tally]);
   const uniqueGrades = useMemo(() => ['ALL', ...Array.from(new Set(tally.map(item => item.grade)))], [tally]);
+
+  const discrepantJoints = useMemo(() => tally.filter(j => j.status === 'DISCREPANT'), [tally]);
 
   // Filtered Tally
   const filteredTally = useMemo(() => {
@@ -165,6 +168,15 @@ const ReportsScanner: React.FC = () => {
   const resetFilters = () => {
     setFilterType('ALL');
     setFilterGrade('ALL');
+  };
+
+  const jumpToDiscrepancy = () => {
+    if (discrepantJoints.length > 0) {
+      const firstDiscrepant = discrepantJoints[0];
+      setHoveredJoint(firstDiscrepant.id);
+      
+      // The useEffect for hoveredJoint will handle the scrolling
+    }
   };
 
   const SCALE = 6;
@@ -391,11 +403,18 @@ const ReportsScanner: React.FC = () => {
                         key={item.id}
                         onMouseEnter={() => setHoveredJoint(item.id)}
                         onMouseLeave={() => setHoveredJoint(null)}
-                        className={`group transition-all relative ${isHovered ? 'bg-emerald-500/20 scale-[0.995] origin-left' : item.status === 'DISCREPANT' ? 'bg-red-500/10 text-red-400' : 'bg-slate-900/40 hover:bg-emerald-500/5 text-emerald-600'}`}
+                        className={`group transition-all relative ${
+                          isHovered 
+                            ? 'bg-emerald-500/20 scale-[0.995] origin-left' 
+                            : item.status === 'DISCREPANT' 
+                              ? 'bg-red-500/30 text-red-400 shadow-[inset_6px_0_0_0_#ef4444] animate-pulse' 
+                              : 'bg-slate-900/40 hover:bg-emerald-500/5 text-emerald-600'
+                        }`}
                       >
-                        <td className="py-2.5 pl-2 font-black border-l-2 border-transparent group-hover:border-emerald-500">
+                        <td className={`py-2.5 pl-2 font-black border-l-2 transition-all ${item.status === 'DISCREPANT' ? 'border-red-500' : 'border-transparent group-hover:border-emerald-500'}`}>
                           <div className="flex items-center">
-                            {isHovered && <ChevronRight size={10} className="mr-1 text-emerald-400 animate-in fade-in slide-in-from-left-1" />}
+                            {item.status === 'DISCREPANT' && <ShieldAlert size={12} className="mr-1 text-red-500 animate-bounce" />}
+                            {isHovered && item.status !== 'DISCREPANT' && <ChevronRight size={10} className="mr-1 text-emerald-400 animate-in fade-in slide-in-from-left-1" />}
                             {item.id}
                           </div>
                         </td>
@@ -425,82 +444,158 @@ const ReportsScanner: React.FC = () => {
         </div>
 
         {/* Module C: Forensic Schematic Visualizer */}
-        <div className="w-full xl:w-72 bg-slate-950/90 border border-emerald-900/30 rounded-xl p-4 flex flex-col relative shadow-2xl h-80 xl:h-auto">
+        <div className="w-full xl:w-80 bg-slate-950/90 border border-emerald-900/30 rounded-xl p-4 flex flex-col relative shadow-2xl h-80 xl:h-auto">
            <div className="flex items-center justify-between mb-4 border-b border-emerald-900/20 pb-2">
-              <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Well_Schematic</span>
-              <Target size={14} className="text-emerald-700" />
+              <div className="flex items-center space-x-2">
+                <Target size={14} className="text-emerald-500" />
+                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Well_Schematic</span>
+              </div>
+              {discrepantJoints.length > 0 && (
+                <div 
+                  onClick={jumpToDiscrepancy}
+                  className="flex items-center space-x-1 px-2 py-0.5 bg-red-500/20 border border-red-500/40 rounded cursor-pointer hover:bg-red-500/40 transition-all group"
+                >
+                  <AlertTriangle size={10} className="text-red-500 animate-pulse" />
+                  <span className="text-[8px] font-black text-red-400 uppercase">{discrepantJoints.length}_DISCREPANCIES</span>
+                </div>
+              )}
            </div>
 
-           <div ref={schematicContainerRef} className="flex-1 bg-slate-900/20 rounded border border-emerald-900/10 flex flex-col items-center relative custom-scrollbar overflow-y-auto overflow-x-hidden">
-              <svg width="240" height={schematicHeight} className="opacity-90">
-                <rect x="105" y="0" width="30" height={schematicHeight} fill="none" stroke="#064e3b" strokeWidth="1" strokeDasharray="4 2" />
-                
-                {tally.map((item) => {
-                  const yStart = (item.cumulative_m - item.length_m) * SCALE + 20; 
-                  const height = item.length_m * SCALE;
-                  const isHovered = hoveredJoint === item.id;
-                  
-                  // Highlight filtered items in schematic? 
-                  // Let's dim those that don't match the filter
-                  const matchesFilter = (filterType === 'ALL' || item.type === filterType) && 
-                                       (filterGrade === 'ALL' || item.grade === filterGrade);
-                  
-                  return (
-                    <g 
-                      key={item.id} 
-                      ref={el => { jointRefs.current[item.id] = el; }}
-                      className={`cursor-pointer transition-all duration-300 ${!matchesFilter ? 'opacity-20' : 'opacity-100'}`}
-                      onMouseEnter={() => setHoveredJoint(item.id)}
-                      onMouseLeave={() => setHoveredJoint(null)}
-                    >
-                      <rect 
-                        x="108" 
-                        y={yStart} 
-                        width="24" 
-                        height={height} 
-                        fill={isHovered ? (item.status === 'DISCREPANT' ? '#ef444488' : 'rgba(16, 185, 129, 0.6)') : (item.status === 'DISCREPANT' ? '#ef444444' : 'rgba(16, 185, 129, 0.08)')}
-                        stroke={isHovered ? '#ffffff' : (item.status === 'DISCREPANT' ? '#ef4444' : '#10b98144')}
-                        strokeWidth={isHovered ? 2 : 1}
-                        className={`transition-all duration-300 ${isHovered ? (item.status === 'DISCREPANT' ? 'filter drop-shadow-[0_0_12px_rgba(239,68,68,0.8)]' : 'filter drop-shadow-[0_0_12px_rgba(16,185,129,0.8)]') : ''}`}
-                      />
-                      
-                      {/* Always visible joint ID and cumulative length */}
-                      {!isHovered && (
-                        <text 
-                          x="100" 
-                          y={yStart + height/2 + 2} 
-                          fill={item.status === 'DISCREPANT' ? '#ef4444' : '#10b981'} 
-                          fontSize="6" 
-                          fontWeight="bold"
-                          opacity={item.status === 'DISCREPANT' ? "0.9" : "0.4"} 
-                          textAnchor="end"
-                          className="pointer-events-none"
-                        >
-                          {item.id} | {item.cumulative_m.toFixed(1)}m
-                        </text>
-                      )}
+           <div className="flex items-center justify-between mb-2 px-1">
+              <div className="flex items-center space-x-2">
+                <button 
+                  onClick={() => setHighlightDiscrepancies(!highlightDiscrepancies)}
+                  className={`text-[8px] font-black uppercase tracking-tighter px-2 py-1 rounded border transition-all ${highlightDiscrepancies ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-slate-900 border-emerald-900/30 text-emerald-900'}`}
+                >
+                  {highlightDiscrepancies ? 'Glow_Active' : 'Glow_Off'}
+                </button>
+              </div>
+              <div className="text-[8px] font-mono text-emerald-900">SCALE: 1:{SCALE}m</div>
+           </div>
 
-                      {isHovered && (
-                        <g className="animate-in fade-in slide-in-from-left-2 duration-300">
-                          <line x1="80" y1={yStart + height/2} x2="108" y2={yStart + height/2} stroke="#ffffff" strokeWidth="1.5" strokeDasharray="3 2" />
-                          <line x1="132" y1={yStart + height/2} x2="160" y2={yStart + height/2} stroke="#ffffff" strokeWidth="1.5" strokeDasharray="3 2" />
-                          
-                          {/* Floating Detail Badge */}
-                          <rect x="165" y={yStart + height/2 - 18} width="85" height="36" rx="4" fill="rgba(2, 6, 23, 0.95)" stroke="#10b981" strokeWidth="1" className="shadow-2xl" />
-                          <text x="172" y={yStart + height/2 - 4} fill="#10b981" fontSize="9" fontWeight="black" className="uppercase">JOINT_{item.id}</text>
-                          <text x="172" y={yStart + height/2 + 8} fill="#ffffff" fontSize="8" fontWeight="bold" opacity="0.9">{item.type}</text>
-                          <text x="172" y={yStart + height/2 + 16} fill="#10b981" fontSize="7" opacity="0.6">{item.cumulative_m.toFixed(2)}m</text>
-                          
-                          {/* Depth Callout */}
-                          <rect x="25" y={yStart + height/2 - 10} width="50" height="20" rx="2" fill="rgba(2, 6, 23, 0.8)" />
-                          <text x="70" y={yStart + height/2 + 3} fill="#10b981" fontSize="8" fontWeight="black" textAnchor="end">{item.cumulative_m.toFixed(1)}m</text>
-                        </g>
-                      )}
-                    </g>
-                  );
-                })}
-              </svg>
-              <div className="absolute top-0 left-2 bottom-0 flex flex-col justify-between py-2 pointer-events-none opacity-20">
+            <div ref={schematicContainerRef} className="flex-1 bg-slate-900/40 rounded border border-emerald-900/10 flex flex-col items-center relative custom-scrollbar overflow-y-auto overflow-x-hidden">
+               {/* Wellbore Background */}
+               <div className="absolute inset-0 pointer-events-none opacity-10">
+                 <div className="absolute left-1/2 -translate-x-1/2 w-40 h-full border-x-4 border-emerald-900/30" />
+                 <div className="absolute left-1/2 -translate-x-1/2 w-32 h-full border-x-2 border-emerald-900/20" />
+               </div>
+
+               {/* Depth Ruler Background */}
+               <div className="absolute left-0 top-0 bottom-0 w-8 border-r border-emerald-900/10 pointer-events-none z-0">
+                 {Array.from({ length: Math.ceil(totalLength / 10) + 1 }).map((_, i) => (
+                   <div key={i} className="absolute w-full border-t border-emerald-900/20 flex items-start pl-1" style={{ top: `${i * 10 * SCALE + 20}px` }}>
+                     <span className="text-[6px] font-mono text-emerald-900">{i * 10}m</span>
+                   </div>
+                 ))}
+               </div>
+
+               <svg width="280" height={schematicHeight} className="opacity-90 z-10">
+                 {/* Center Line */}
+                 <line x1="140" y1="0" x2="140" y2={schematicHeight} stroke="#064e3b" strokeWidth="1" strokeDasharray="4 2" />
+                 
+                 {tally.map((item) => {
+                   const yStart = (item.cumulative_m - item.length_m) * SCALE + 20; 
+                   const height = item.length_m * SCALE;
+                   const isHovered = hoveredJoint === item.id;
+                   const isDiscrepant = item.status === 'DISCREPANT';
+                   
+                   const matchesFilter = (filterType === 'ALL' || item.type === filterType) && 
+                                        (filterGrade === 'ALL' || item.grade === filterGrade);
+                   
+                   return (
+                     <g 
+                       key={item.id} 
+                       ref={el => { jointRefs.current[item.id] = el; }}
+                       className={`cursor-pointer transition-all duration-300 ${!matchesFilter ? 'opacity-20' : 'opacity-100'}`}
+                       onMouseEnter={() => setHoveredJoint(item.id)}
+                       onMouseLeave={() => setHoveredJoint(null)}
+                     >
+                       {/* Discrepancy Pulse Effect */}
+                       {isDiscrepant && highlightDiscrepancies && (
+                         <g>
+                           <rect 
+                             x="125" 
+                             y={yStart - 2} 
+                             width="30" 
+                             height={height + 4} 
+                             fill="none"
+                             stroke="#ef4444"
+                             strokeWidth="2"
+                             className="animate-pulse"
+                           />
+                           <rect 
+                             x="120" 
+                             y={yStart - 4} 
+                             width="40" 
+                             height={height + 8} 
+                             fill="rgba(239, 68, 68, 0.1)"
+                             className="animate-pulse"
+                           />
+                         </g>
+                       )}
+
+                       <rect 
+                         x="128" 
+                         y={yStart} 
+                         width="24" 
+                         height={height} 
+                         fill={isHovered ? (isDiscrepant ? '#ef4444aa' : 'rgba(16, 185, 129, 0.6)') : (isDiscrepant ? '#ef444466' : 'rgba(16, 185, 129, 0.08)')}
+                         stroke={isHovered ? '#ffffff' : (isDiscrepant ? '#ef4444' : '#10b98144')}
+                         strokeWidth={isHovered ? 2 : 1}
+                         className={`transition-all duration-300 ${isHovered ? (isDiscrepant ? 'filter drop-shadow-[0_0_15px_#ef4444]' : 'filter drop-shadow-[0_0_12px_rgba(16,185,129,0.8)]') : ''}`}
+                       />
+                       
+                       {/* Joint ID Label */}
+                       {!isHovered && (
+                         <g transform={`translate(120, ${yStart + height/2 + 2})`}>
+                           {isDiscrepant && (
+                              <text x="-12" y="-1" fill="#ef4444" fontSize="10" className="animate-bounce">⚠️</text>
+                           )}
+                           <text 
+                             x="0" 
+                             y="0" 
+                             fill={isDiscrepant ? '#ef4444' : '#10b981'} 
+                             fontSize="6" 
+                             fontWeight="bold"
+                             opacity={isDiscrepant ? "1" : "0.4"} 
+                             textAnchor="end"
+                             className="pointer-events-none"
+                           >
+                             {item.id}
+                           </text>
+                         </g>
+                       )}
+
+                       {/* Discrepancy Marker */}
+                       {isDiscrepant && !isHovered && (
+                         <g transform={`translate(158, ${yStart + height/2})`}>
+                           <circle r="4" fill="#ef4444" className="animate-ping" />
+                           <circle r="2.5" fill="#ef4444" />
+                         </g>
+                       )}
+
+                       {isHovered && (
+                         <g className="animate-in fade-in slide-in-from-left-2 duration-300">
+                           <line x1="100" y1={yStart + height/2} x2="128" y2={yStart + height/2} stroke="#ffffff" strokeWidth="1.5" strokeDasharray="3 2" />
+                           <line x1="152" y1={yStart + height/2} x2="180" y2={yStart + height/2} stroke="#ffffff" strokeWidth="1.5" strokeDasharray="3 2" />
+                           
+                           {/* Floating Detail Badge */}
+                           <rect x="185" y={yStart + height/2 - 25} width="95" height="50" rx="4" fill="rgba(2, 6, 23, 0.98)" stroke={isDiscrepant ? "#ef4444" : "#10b981"} strokeWidth="1.5" className="shadow-2xl" />
+                           <text x="192" y={yStart + height/2 - 10} fill={isDiscrepant ? "#ef4444" : "#10b981"} fontSize="10" fontWeight="black" className="uppercase">JOINT_{item.id}</text>
+                           <text x="192" y={yStart + height/2 + 4} fill="#ffffff" fontSize="8" fontWeight="bold" opacity="0.9">{item.type}</text>
+                           <text x="192" y={yStart + height/2 + 14} fill={isDiscrepant ? "#ef4444" : "#10b981"} fontSize="8" fontWeight="black">{item.length_m.toFixed(2)}m</text>
+                           <text x="192" y={yStart + height/2 + 22} fill="#ffffff" fontSize="7" opacity="0.5">CUMUL: {item.cumulative_m.toFixed(2)}m</text>
+                           
+                           {/* Depth Callout */}
+                           <rect x="45" y={yStart + height/2 - 10} width="50" height="20" rx="2" fill="rgba(2, 6, 23, 0.8)" />
+                           <text x="90" y={yStart + height/2 + 3} fill="#10b981" fontSize="8" fontWeight="black" textAnchor="end">{item.cumulative_m.toFixed(1)}m</text>
+                         </g>
+                       )}
+                     </g>
+                   );
+                 })}
+               </svg>
+              <div className="absolute top-0 left-10 bottom-0 flex flex-col justify-between py-2 pointer-events-none opacity-20">
                  <span className="text-[7px] text-emerald-900 font-black">0.00m</span>
                  <span className="text-[7px] text-emerald-900 font-black">DATUM_LOCK</span>
               </div>
