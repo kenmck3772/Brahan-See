@@ -35,8 +35,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       document.body.style.backgroundColor = '#f8fafc';
       document.body.style.color = '#1e293b';
     } else if (theme === 'HIGH_CONTRAST') {
-      document.body.style.backgroundColor = '#ffffff';
-      document.body.style.color = '#000000';
+      document.body.style.backgroundColor = '#000000';
+      document.body.style.color = '#ffffff';
     } else if (theme === 'TECHNICAL') {
       document.body.style.backgroundColor = '#18181b';
       document.body.style.color = '#d4d4d8';

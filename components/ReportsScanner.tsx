@@ -388,7 +388,9 @@ const ReportsScanner: React.FC = () => {
                   <tr className="text-emerald-800 uppercase text-[8px] font-black">
                     <th className="pb-2 pl-2">Jnt#</th>
                     <th className="pb-2">Type</th>
+                    <th className="pb-2">OD (in)</th>
                     <th className="pb-2">ID (in)</th>
+                    <th className="pb-2">Weight (lb/ft)</th>
                     <th className="pb-2">Grade</th>
                     <th className="pb-2">Len (m)</th>
                     <th className="pb-2">Cumul (m)</th>
@@ -419,12 +421,14 @@ const ReportsScanner: React.FC = () => {
                           </div>
                         </td>
                         <td className="py-2.5 font-bold">{item.type}</td>
+                        <td className="py-2.5 opacity-60">{item.od_in.toFixed(3)}</td>
                         <td className="py-2.5 opacity-60">{item.id_in.toFixed(3)}</td>
+                        <td className="py-2.5 opacity-60">{item.weight_lbft.toFixed(1)}</td>
                         <td className="py-2.5 opacity-60">{item.grade}</td>
                         <td className="py-2.5 font-black">{item.length_m.toFixed(2)}</td>
                         <td className="py-2.5 font-black">{item.cumulative_m.toFixed(2)}</td>
                         <td className="py-2.5 pr-2">
-                          <span className={`px-2 py-0.5 rounded-full text-[7px] font-black ${item.status === 'VALID' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500 text-slate-950 animate-pulse'}`}>
+                          <span className={`px-2 py-0.5 rounded-full text-[7px] font-black ${item.status === 'VALID' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500 text-slate-950 animate-subtle-pulse'}`}>
                             {item.status}
                           </span>
                         </td>

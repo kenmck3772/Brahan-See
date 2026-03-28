@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import { Target, Crosshair, AlertOctagon, Info, AlertTriangle } from 'lucide-react';
 import { SignalMetadata, SyncAnomaly } from '../types';
+import { ThemeType } from '../src/context/ThemeContext';
 
 interface SyncMonitorChartProps {
   combinedData: any[];
@@ -22,6 +23,7 @@ interface SyncMonitorChartProps {
   onToggleSignal: (dataKey: string) => void;
   onAnomalyClick?: (anomaly: SyncAnomaly) => void;
   selectedAnomalyId?: string | null;
+  theme?: ThemeType;
 }
 
 const CustomTooltip: React.FC<any> = ({ active, payload, label, unitLabel, convertToDisplay }) => {
@@ -67,10 +69,12 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
   anomalies = [],
   onToggleSignal,
   onAnomalyClick,
-  selectedAnomalyId
+  selectedAnomalyId,
+  theme
 }) => {
   const [activeDepth, setActiveDepth] = useState<number | null>(null);
   const [activePayload, setActivePayload] = useState<any>(null);
+  const [mouseY, setMouseY] = useState<number | null>(null);
 
   const handleLegendClick = (e: any) => {
     if (e && e.dataKey) {
@@ -130,38 +134,75 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
   const maxDepth = combinedData.length > 0 ? Math.max(...combinedData.map(d => d.depth)) : 100;
 
   return (
-    <div className="flex-1 min-h-0 bg-[var(--slate-abyssal)]/40 rounded-xl border border-[var(--emerald-primary)]/10 p-4 relative group overflow-hidden flex flex-col shadow-inner cyber-border glass-panel hover:bg-[var(--slate-abyssal)]/60 transition-colors duration-500">
-      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[var(--emerald-primary)]/20 to-transparent opacity-50"></div>
-      <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[var(--emerald-primary)]/20 to-transparent opacity-50"></div>
+    <div className={`flex-1 min-h-0 rounded-xl border p-4 relative group overflow-hidden flex flex-col shadow-inner transition-colors duration-500 ${
+      theme === 'HIGH_CONTRAST' ? 'bg-black border-white' : 'bg-[var(--slate-abyssal)]/40 border-[var(--emerald-primary)]/10 glass-panel cyber-border hover:bg-[var(--slate-abyssal)]/60'
+    }`}>
+      <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[var(--emerald-primary)]/20 to-transparent opacity-50 ${theme === 'HIGH_CONTRAST' ? 'hidden' : ''}`}></div>
+      <div className={`absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[var(--emerald-primary)]/20 to-transparent opacity-50 ${theme === 'HIGH_CONTRAST' ? 'hidden' : ''}`}></div>
       
       <div className="absolute top-4 left-4 z-20 flex flex-col space-y-2">
-        <div className="flex items-center space-x-2 bg-slate-900/90 border border-[var(--emerald-primary)]/20 px-3 py-1 rounded shadow-lg glass-panel cyber-border">
-          <Target size={12} className="text-[var(--emerald-primary)] animate-pulse text-glow-emerald" />
-          <span className="text-[10px] font-black uppercase tracking-widest text-[var(--emerald-primary)] text-glow-emerald">Trace_Lock_Active</span>
+        <div className={`flex items-center space-x-2 px-3 py-1 rounded shadow-lg ${
+          theme === 'HIGH_CONTRAST' ? 'bg-white border-black text-black' : 'bg-slate-900/90 border border-[var(--emerald-primary)]/20 text-[var(--emerald-primary)] glass-panel cyber-border'
+        }`}>
+          <Target size={12} className={`${theme === 'HIGH_CONTRAST' ? 'text-black' : 'text-[var(--emerald-primary)] animate-pulse text-glow-emerald'}`} />
+          <span className="text-[10px] font-black uppercase tracking-widest">Trace_Lock_Active</span>
         </div>
         {validationError && (
-          <div className="text-[9px] font-black text-orange-500 bg-orange-500/10 border border-orange-500/30 px-3 py-1 uppercase animate-in fade-in slide-in-from-left-4 backdrop-blur-md glass-panel shadow-[0_0_15px_rgba(249,115,22,0.2)]">
+          <div className={`text-[9px] font-black px-3 py-1 uppercase animate-in fade-in slide-in-from-left-4 backdrop-blur-md shadow-[0_0_15px_rgba(249,115,22,0.2)] ${
+            theme === 'HIGH_CONTRAST' ? 'bg-white border-black text-black' : 'text-orange-500 bg-orange-500/10 border border-orange-500/30 glass-panel'
+          }`}>
             {validationError}
           </div>
         )}
         {anomalies.length > 0 && (
-          <div className="text-[9px] font-black text-[var(--alert-red)] bg-[var(--alert-red)]/10 border border-[var(--alert-red)]/30 px-3 py-1 uppercase animate-in fade-in slide-in-from-left-4 duration-500 backdrop-blur-md glass-panel shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+          <div className={`text-[9px] font-black px-3 py-1 uppercase animate-in fade-in slide-in-from-left-4 duration-500 backdrop-blur-md shadow-[0_0_15px_rgba(239,68,68,0.2)] ${
+            theme === 'HIGH_CONTRAST' ? 'bg-white border-black text-black' : 'text-[var(--alert-red)] bg-[var(--alert-red)]/10 border border-[var(--alert-red)]/30 glass-panel'
+          }`}>
             {anomalies.length} Forensic Anomalies Identified
           </div>
         )}
       </div>
 
-      <div className="absolute top-4 right-4 z-20 flex flex-col items-end space-y-1">
-        {activeDepth && (
-          <div className="bg-[var(--emerald-primary)]/90 border border-emerald-400 px-3 py-1 rounded shadow-2xl animate-in fade-in slide-in-from-right-4 glass-panel cyber-border">
-            <span className="text-[10px] font-terminal font-black text-slate-950 tracking-widest uppercase flex items-center">
-              <Crosshair size={10} className="mr-1.5" /> DEPTH: {convertToDisplay(activeDepth).toFixed(2)}{unitLabel}
+      <div className="absolute top-4 right-4 z-20 flex flex-col items-end space-y-1 max-w-[220px]">
+        {activeDepth !== null && (
+          <div className={`px-3 py-1 rounded shadow-2xl animate-in fade-in slide-in-from-right-4 w-full ${
+            theme === 'HIGH_CONTRAST' ? 'bg-white border-black text-black' : 'bg-[var(--emerald-primary)]/90 border border-emerald-400 glass-panel cyber-border'
+          }`}>
+            <span className={`text-[10px] font-terminal font-black tracking-widest uppercase flex items-center justify-between ${theme === 'HIGH_CONTRAST' ? 'text-black' : 'text-slate-950'}`}>
+              <span className="flex items-center"><Crosshair size={10} className="mr-1.5" /> DEPTH</span>
+              <span>{convertToDisplay(activeDepth).toFixed(2)}{unitLabel}</span>
             </span>
           </div>
         )}
-        {activeDepth && Math.abs(offset) > 0.01 && (
-          <div className="bg-orange-500/90 border border-orange-400 px-3 py-1 rounded shadow-2xl animate-in fade-in slide-in-from-right-4 delay-75 glass-panel cyber-border">
-            <span className="text-[10px] font-terminal font-black text-slate-950 tracking-widest uppercase">GHOST_REF: {convertToDisplay(activeDepth + offset).toFixed(2)}{unitLabel}</span>
+        
+        {activeDepth !== null && activePayload && signals.map(sig => {
+          const dataKey = sig.id === 'SIG-001' ? 'baseGR' : sig.id === 'SIG-002' ? 'ghostGR' : sig.id;
+          const value = activePayload[dataKey];
+          if (sig.visible && value !== undefined && value !== null) {
+            return (
+              <div 
+                key={`active-val-${sig.id}`}
+                className={`px-3 py-0.5 rounded border shadow-lg animate-in fade-in slide-in-from-right-4 w-full flex items-center justify-between ${
+                  theme === 'HIGH_CONTRAST' ? 'bg-white border-black text-black' : 'glass-panel cyber-border'
+                }`}
+                style={theme === 'HIGH_CONTRAST' ? {} : { backgroundColor: `${sig.color}CC`, borderColor: sig.color }}
+              >
+                <span className={`text-[8px] font-black uppercase tracking-tighter truncate mr-2 ${theme === 'HIGH_CONTRAST' ? 'text-black' : 'text-slate-950'}`}>{sig.id === 'SIG-002' ? ghostLabel : sig.name}</span>
+                <span className={`text-[9px] font-terminal font-black ${theme === 'HIGH_CONTRAST' ? 'text-black' : 'text-slate-950'}`}>{value.toFixed(2)}</span>
+              </div>
+            );
+          }
+          return null;
+        })}
+
+        {activeDepth !== null && Math.abs(offset) > 0.01 && (
+          <div className={`px-3 py-1 rounded shadow-2xl animate-in fade-in slide-in-from-right-4 delay-75 w-full ${
+            theme === 'HIGH_CONTRAST' ? 'bg-white border-black text-black' : 'bg-orange-500/90 border border-orange-400 glass-panel cyber-border'
+          }`}>
+            <span className={`text-[10px] font-terminal font-black tracking-widest uppercase flex items-center justify-between ${theme === 'HIGH_CONTRAST' ? 'text-black' : 'text-slate-950'}`}>
+              <span>GHOST_REF</span>
+              <span>{convertToDisplay(activeDepth + offset).toFixed(2)}{unitLabel}</span>
+            </span>
           </div>
         )}
       </div>
@@ -174,11 +215,15 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
               if (state && state.activePayload && state.activePayload.length > 0) {
                 setActiveDepth(state.activePayload[0].payload.depth);
                 setActivePayload(state.activePayload[0].payload);
+                if (state.activeCoordinate) {
+                  setMouseY(state.activeCoordinate.y);
+                }
               }
             }}
             onMouseLeave={() => {
               setActiveDepth(null);
               setActivePayload(null);
+              setMouseY(null);
             }}
             margin={{ top: 20, right: 30, left: 10, bottom: 20 }}
           >
@@ -213,42 +258,42 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
                 </feMerge>
               </filter>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--emerald-primary)" opacity={0.05} vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke={theme === 'HIGH_CONTRAST' ? '#ffffff' : 'var(--emerald-primary)'} opacity={0.05} vertical={false} />
             <XAxis 
               dataKey="depth" 
-              stroke="var(--emerald-primary)" 
+              stroke={theme === 'HIGH_CONTRAST' ? '#ffffff' : 'var(--emerald-primary)'} 
               fontSize={9} 
-              axisLine={{stroke: 'var(--emerald-primary)', strokeOpacity: 0.2}} 
-              tickLine={{stroke: 'var(--emerald-primary)', strokeOpacity: 0.2}} 
+              axisLine={{stroke: theme === 'HIGH_CONTRAST' ? '#ffffff' : 'var(--emerald-primary)', strokeOpacity: 0.2}} 
+              tickLine={{stroke: theme === 'HIGH_CONTRAST' ? '#ffffff' : 'var(--emerald-primary)', strokeOpacity: 0.2}} 
               tickFormatter={(val) => convertToDisplay(val).toFixed(0)}
-              tick={{fill: 'var(--emerald-primary)', opacity: 0.5, fontWeight: 900, fontFamily: 'JetBrains Mono'}}
-              label={{ value: `DEPTH (${unitLabel})`, position: 'bottom', offset: 0, fill: 'var(--emerald-primary)', opacity: 0.3, fontSize: 8, fontWeight: 'black', letterSpacing: 2 }}
+              tick={{fill: theme === 'HIGH_CONTRAST' ? '#ffffff' : 'var(--emerald-primary)', opacity: 0.5, fontWeight: 900, fontFamily: 'JetBrains Mono'}}
+              label={{ value: `DEPTH (${unitLabel})`, position: 'bottom', offset: 0, fill: theme === 'HIGH_CONTRAST' ? '#ffffff' : 'var(--emerald-primary)', opacity: 0.3, fontSize: 8, fontWeight: 'black', letterSpacing: 2 }}
             />
             <YAxis 
-              stroke="var(--emerald-primary)" 
+              stroke={theme === 'HIGH_CONTRAST' ? '#ffffff' : 'var(--emerald-primary)'} 
               fontSize={9} 
-              axisLine={{stroke: 'var(--emerald-primary)', strokeOpacity: 0.2}} 
-              tickLine={{stroke: 'var(--emerald-primary)', strokeOpacity: 0.2}} 
-              tick={{fill: 'var(--emerald-primary)', opacity: 0.5, fontWeight: 900, fontFamily: 'JetBrains Mono'}}
-              label={{ value: 'GAMMA RAY (API)', angle: -90, position: 'insideLeft', fill: 'var(--emerald-primary)', opacity: 0.3, fontSize: 8, fontWeight: 'black', letterSpacing: 2 }}
+              axisLine={{stroke: theme === 'HIGH_CONTRAST' ? '#ffffff' : 'var(--emerald-primary)', strokeOpacity: 0.2}} 
+              tickLine={{stroke: theme === 'HIGH_CONTRAST' ? '#ffffff' : 'var(--emerald-primary)', strokeOpacity: 0.2}} 
+              tick={{fill: theme === 'HIGH_CONTRAST' ? '#ffffff' : 'var(--emerald-primary)', opacity: 0.5, fontWeight: 900, fontFamily: 'JetBrains Mono'}}
+              label={{ value: 'GAMMA RAY (API)', angle: -90, position: 'insideLeft', fill: theme === 'HIGH_CONTRAST' ? '#ffffff' : 'var(--emerald-primary)', opacity: 0.3, fontSize: 8, fontWeight: 'black', letterSpacing: 2 }}
             />
             <Tooltip 
               content={<CustomTooltip unitLabel={unitLabel} convertToDisplay={convertToDisplay} />}
-              cursor={{ stroke: 'var(--emerald-primary)', strokeWidth: 1, strokeDasharray: '3 3', opacity: 0.5 }} 
+              cursor={{ stroke: theme === 'HIGH_CONTRAST' ? '#ffffff' : 'var(--emerald-primary)', strokeWidth: 2, strokeDasharray: 'none', opacity: 0.8 }} 
             />
             <Legend 
               onClick={handleLegendClick}
               verticalAlign="bottom" 
               align="center" 
               iconType="plainline"
-              wrapperStyle={{ paddingTop: '20px', fontSize: '9px', fontWeight: 'black', textTransform: 'uppercase', fontFamily: 'JetBrains Mono', cursor: 'pointer', letterSpacing: '1px' }}
+              wrapperStyle={{ paddingTop: '20px', fontSize: '9px', fontWeight: 'black', textTransform: 'uppercase', fontFamily: 'JetBrains Mono', cursor: 'pointer', letterSpacing: '1px', color: theme === 'HIGH_CONTRAST' ? '#ffffff' : 'inherit' }}
             />
             
             {/* Background Flow Gradient */}
             <ReferenceArea 
               x1={minDepth} 
               x2={maxDepth} 
-              fill="url(#dataFlowGradient)" 
+              fill={theme === 'HIGH_CONTRAST' ? 'none' : "url(#dataFlowGradient)"} 
               fillOpacity={1}
               stroke="none"
             />
@@ -257,10 +302,10 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
               <ReferenceArea 
                 x1={combinedData[0].depth} 
                 x2={combinedData[0].depth + offset} 
-                fill="url(#ghostFlowGradient)" 
+                fill={theme === 'HIGH_CONTRAST' ? 'none' : "url(#ghostFlowGradient)"} 
                 fillOpacity={1}
-                stroke="#FF5F1F"
-                strokeOpacity={0.1}
+                stroke={theme === 'HIGH_CONTRAST' ? '#ffffff' : "#FF5F1F"}
+                strokeOpacity={0.3}
                 strokeDasharray="4 2"
               />
             )}
@@ -269,7 +314,7 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
             {anomalies.map(anomaly => {
               const isSelected = selectedAnomalyId === anomaly.id;
               const isCritical = anomaly.severity === 'CRITICAL';
-              const color = isCritical ? 'var(--alert-red)' : '#f97316';
+              const color = theme === 'HIGH_CONTRAST' ? '#ffffff' : (isCritical ? 'var(--alert-red)' : '#f97316');
               const labelText = isCritical ? 'CRITICAL_ANOMALY' : 'FORENSIC_WARNING';
               const labelWidth = isCritical ? 80 : 70;
               
@@ -312,14 +357,14 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
                             d={`M${x},${topY} L${x + 10},${topY - 5} L${x + labelWidth + 20},${topY - 5} L${x + labelWidth + 20},${topY + 15} L${x + 10},${topY + 15} Z`} 
                             fill={color} 
                             fillOpacity={0.9}
-                            stroke="#ffffff"
+                            stroke={theme === 'HIGH_CONTRAST' ? '#000000' : "#ffffff"}
                             strokeWidth={isSelected ? 2 : 1}
                             className="filter drop-shadow-lg"
                           />
                           <text 
                             x={x + 15} 
                             y={topY + 7} 
-                            fill="#ffffff" 
+                            fill={theme === 'HIGH_CONTRAST' ? '#000000' : "#ffffff"} 
                             fontSize="8" 
                             fontWeight="black" 
                             className="uppercase tracking-tighter pointer-events-none"
@@ -327,7 +372,7 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
                             {labelText}
                           </text>
                           {isSelected && (
-                            <circle cx={x} cy={topY + 5} r="4" fill="#ffffff" className="animate-ping" />
+                            <circle cx={x} cy={topY + 5} r="4" fill={theme === 'HIGH_CONTRAST' ? '#ffffff' : "#ffffff"} className="animate-ping" />
                           )}
                         </g>
                       );
@@ -341,28 +386,66 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
             {activeDepth !== null && (
               <ReferenceLine 
                 x={activeDepth} 
-                stroke="var(--emerald-primary)" 
-                strokeWidth={1}
-                strokeOpacity={0.6}
-                label={{ value: 'LOCUS', position: 'top', fill: 'var(--emerald-primary)', fontSize: 8, fontWeight: 'bold' }}
+                stroke={theme === 'HIGH_CONTRAST' ? '#ffffff' : "var(--emerald-primary)"} 
+                strokeWidth={2}
+                strokeOpacity={1}
+                className="animate-in fade-in duration-300"
+                label={{ value: 'LOCUS', position: 'top', fill: theme === 'HIGH_CONTRAST' ? '#ffffff' : 'var(--emerald-primary)', fontSize: 8, fontWeight: 'black', letterSpacing: 1 }}
               />
             )}
 
+            {/* Forensic Crosshair - Horizontal (Signal Values) */}
+            {activeDepth !== null && activePayload && signals.map(sig => {
+              const dataKey = sig.id === 'SIG-001' ? 'baseGR' : sig.id === 'SIG-002' ? 'ghostGR' : sig.id;
+              const value = activePayload[dataKey];
+              if (sig.visible && value !== undefined && value !== null) {
+                return (
+                  <ReferenceLine 
+                    key={`h-cross-${sig.id}`}
+                    y={value} 
+                    stroke={theme === 'HIGH_CONTRAST' ? '#ffffff' : sig.color} 
+                    strokeWidth={1.5}
+                    strokeOpacity={0.6}
+                    strokeDasharray="3 3"
+                    className="animate-in fade-in slide-in-from-left-4 duration-500"
+                  />
+                );
+              }
+              return null;
+            })}
+
             {viewMode === 'DIFFERENTIAL' && (
-              <Area type="monotone" dataKey="diff" stroke="none" fill="var(--alert-red)" fillOpacity={0.1} isAnimationActive={false} />
+              <Area type="monotone" dataKey="diff" stroke="none" fill={theme === 'HIGH_CONTRAST' ? '#ffffff' : "var(--alert-red)"} fillOpacity={0.1} isAnimationActive={false} />
             )}
+
+            {/* Auto Sync Target Indicator */}
+            <ReferenceLine 
+              y={14.5} 
+              stroke={theme === 'HIGH_CONTRAST' ? '#ffffff' : "#F43F5E"} 
+              strokeDasharray="5 5" 
+              strokeWidth={1}
+              strokeOpacity={0.6}
+              label={{ 
+                value: 'AUTO_SYNC_TARGET', 
+                position: 'right', 
+                fill: theme === 'HIGH_CONTRAST' ? '#ffffff' : '#F43F5E', 
+                fontSize: 8, 
+                fontWeight: 'black',
+                letterSpacing: 1
+              }} 
+            />
 
             {signals.find(s => s.id === 'SIG-001')?.visible && (
               <Line 
                 type="monotone" 
                 dataKey="baseGR" 
                 name="BASE_LOG" 
-                stroke="var(--emerald-primary)" 
+                stroke={theme === 'HIGH_CONTRAST' ? '#ffffff' : "var(--emerald-primary)"} 
                 dot={renderCustomDot} 
-                strokeWidth={2} 
+                strokeWidth={theme === 'HIGH_CONTRAST' ? 3 : 2} 
                 isAnimationActive={false}
-                activeDot={{ r: 6, fill: 'var(--emerald-primary)', stroke: '#ffffff', strokeWidth: 2 }}
-                filter="url(#glow)"
+                activeDot={{ r: 6, fill: theme === 'HIGH_CONTRAST' ? '#ffffff' : 'var(--emerald-primary)', stroke: theme === 'HIGH_CONTRAST' ? '#000000' : '#ffffff', strokeWidth: 2 }}
+                filter={theme === 'HIGH_CONTRAST' ? 'none' : "url(#glow)"}
               />
             )}
             {signals.find(s => s.id === 'SIG-002')?.visible && (
@@ -371,13 +454,13 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
                 type="monotone" 
                 dataKey="ghostGR" 
                 name={ghostLabel} 
-                stroke="#FF5F1F" 
+                stroke={theme === 'HIGH_CONTRAST' ? '#ffffff' : "#FF5F1F"} 
                 dot={renderCustomDot} 
-                strokeWidth={2} 
-                strokeDasharray="5 3" 
+                strokeWidth={theme === 'HIGH_CONTRAST' ? 3 : 2} 
+                strokeDasharray={theme === 'HIGH_CONTRAST' ? "none" : "5 3"} 
                 isAnimationActive={false}
-                activeDot={{ r: 6, fill: '#FF5F1F', stroke: '#ffffff', strokeWidth: 2 }}
-                filter="url(#glow)"
+                activeDot={{ r: 6, fill: theme === 'HIGH_CONTRAST' ? '#ffffff' : '#FF5F1F', stroke: theme === 'HIGH_CONTRAST' ? '#000000' : '#ffffff', strokeWidth: 2 }}
+                filter={theme === 'HIGH_CONTRAST' ? 'none' : "url(#glow)"}
               />
             )}
             {signals.map(sig => {
@@ -388,12 +471,12 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
                     type="monotone" 
                     dataKey={sig.id} 
                     name={sig.name}
-                    stroke={sig.color} 
+                    stroke={theme === 'HIGH_CONTRAST' ? '#ffffff' : sig.color} 
                     dot={renderCustomDot} 
-                    strokeWidth={1.5} 
+                    strokeWidth={theme === 'HIGH_CONTRAST' ? 2 : 1.5} 
                     isAnimationActive={false}
-                    activeDot={{ r: 5, fill: sig.color, stroke: '#ffffff', strokeWidth: 1.5 }}
-                    filter="url(#glow)"
+                    activeDot={{ r: 5, fill: theme === 'HIGH_CONTRAST' ? '#ffffff' : sig.color, stroke: theme === 'HIGH_CONTRAST' ? '#000000' : '#ffffff', strokeWidth: 1.5 }}
+                    filter={theme === 'HIGH_CONTRAST' ? 'none' : "url(#glow)"}
                   />
                 );
               }

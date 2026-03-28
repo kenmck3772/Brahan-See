@@ -36,13 +36,13 @@ const SystemLogs: React.FC<SystemLogsProps> = ({
     let context = "Standard system operation trace.";
     let rootCause = "Nominal process execution.";
     
-    if (log.description.includes('File_Upload')) {
+    if (log.description?.includes('File_Upload')) {
       context = "Ingress of external forensic data into the local correlation buffer.";
       rootCause = isCritical ? "File integrity check failed or size limit exceeded." : "Manual user intervention in data stack.";
-    } else if (log.description.includes('Harvester')) {
+    } else if (log.description?.includes('Harvester')) {
       context = "Real-time data stream from the WellTegra Harvester engine.";
       rootCause = "Automated synchronization of remote sensor data.";
-    } else if (log.description.includes('Shift')) {
+    } else if (log.description?.includes('Shift')) {
       context = "Adjustment of the vertical datum to align legacy and modern datasets.";
       rootCause = "Correction of historical depth discrepancies detected by physics engine.";
     } else if (isCritical) {
@@ -62,9 +62,9 @@ const SystemLogs: React.FC<SystemLogsProps> = ({
       const logDate = new Date(log.timestamp);
       
       const matchesSearch = logSearchTerm === '' || 
-        log.description.toLowerCase().includes(logSearchTerm.toLowerCase()) ||
-        log.layer.toLowerCase().includes(logSearchTerm.toLowerCase()) ||
-        log.id.toLowerCase().includes(logSearchTerm.toLowerCase());
+        (log.description?.toLowerCase().includes(logSearchTerm.toLowerCase()) ?? false) ||
+        (log.layer?.toLowerCase().includes(logSearchTerm.toLowerCase()) ?? false) ||
+        (log.id?.toLowerCase().includes(logSearchTerm.toLowerCase()) ?? false);
 
       let matchesStartDate = true;
       if (logStartDate) {

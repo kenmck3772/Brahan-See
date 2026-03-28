@@ -8,7 +8,7 @@ import {
   Eye, Filter, Lock, Unlock, ShieldX, ShieldCheck,
   Link, Info, X, Calendar, SlidersHorizontal,
   Fingerprint, Clock, FileText, Database,
-  Download, Trash2, RefreshCw, Upload, Sparkles
+  Download, Trash2, RefreshCw, Upload, Sparkles, Copy, Check
 } from 'lucide-react';
 import { MOCK_BASE_LOG, MOCK_GHOST_LOG } from '../constants';
 import { TraumaEvent, SyncAnomaly, CasingIntegrityIssue, SignalMetadata } from '../types';
@@ -25,6 +25,7 @@ import CasingIntegrityReport from './ghost-sync/CasingIntegrityReport';
 import SignalStack from './ghost-sync/SignalStack';
 import CasingIntegrityCheck from './ghost-sync/CasingIntegrityCheck';
 import ForensicControls from './ghost-sync/ForensicControls';
+import WellBoreSchematic from './WellBoreSchematic';
 
 const OFFSET_SAFE_LIMIT = 10;
 const OFFSET_HARD_LIMIT = 20;
@@ -44,7 +45,7 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
   const [offset, setOffset] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isAdjusting, setIsAdjusting] = useState(false);
-  const [viewMode, setViewMode] = useState<'OVERLAY' | 'DIFFERENTIAL'>('OVERLAY');
+  const [viewMode, setViewMode] = useState<'OVERLAY' | 'DIFFERENTIAL' | 'SCHEMATIC'>('OVERLAY');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isShaking, setIsShaking] = useState(false);
@@ -65,15 +66,23 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
   const [selectedAnomaly, setSelectedAnomaly] = useState<SyncAnomaly | null>(null);
   const [severityFilter, setSeverityFilter] = useState<'ALL' | 'CRITICAL' | 'WARNING'>('ALL');
   const [dateFilter, setDateFilter] = useState<'ALL' | 'LAST_7_DAYS' | 'LAST_30_DAYS'>('ALL');
+  const [physicsFilter, setPhysicsFilter] = useState<'ALL' | 'VERIFIED'>('ALL');
   const [isDetectingShift, setIsDetectingShift] = useState(false);
   const [bestShift, setBestShift] = useState<number | null>(null);
   const [isAnomalyPanelOpen, setIsAnomalyPanelOpen] = useState(true);
   const [casingIssues, setCasingIssues] = useState<CasingIntegrityIssue[]>([]);
+
+  const setAnomalyThresholdWithLogging = (val: number) => {
+    setAnomalyThreshold(val);
+    logEvent('Anomaly_Threshold_Updated', 'INFO', { threshold: val });
+  };
+
   const [isCheckingCasing, setIsCheckingCasing] = useState(false);
   const [casingCheckProgress, setCasingCheckProgress] = useState(0);
   const [selectedCasingIssue, setSelectedCasingIssue] = useState<CasingIntegrityIssue | null>(null);
   const [forensicInsight, setForensicInsight] = useState<string | null>(null);
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [selectedSourceType, setSelectedSourceType] = useState<'ALL' | 'BASE_LOG' | 'GHOST_LOG' | 'REMOTE_LOGS'>(() => {
     const saved = localStorage.getItem('ghost_sync_source_type');
     return (saved as 'ALL' | 'BASE_LOG' | 'GHOST_LOG' | 'REMOTE_LOGS') || 'ALL';
@@ -377,9 +386,10 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
         if (dateFilter === 'LAST_7_DAYS' && diffDays > 7) return false;
         if (dateFilter === 'LAST_30_DAYS' && diffDays > 30) return false;
       }
+      if (physicsFilter === 'VERIFIED' && a.physicsValidation !== 'Verified') return false;
       return true;
     });
-  }, [detectedAnomalies, severityFilter, dateFilter]);
+  }, [detectedAnomalies, severityFilter, dateFilter, physicsFilter]);
 
   const filteredSignals = useMemo(() => {
     if (selectedSourceType === 'ALL') return signals;
@@ -471,9 +481,15 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
     const step = (currentTime: number) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      const easeProgress = 1 - Math.pow(1 - progress, 3);
+      
+      // Ease-in-out cubic function for smoother transition
+      const easeProgress = progress < 0.5 
+        ? 4 * progress * progress * progress 
+        : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+        
       const currentOffset = startOffset + (AUTO_SYNC_TARGET - startOffset) * easeProgress;
       setOffset(currentOffset);
+      
       if (progress < 1) {
         requestAnimationFrame(step);
       } else {
@@ -544,7 +560,7 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
             description: severity === 'CRITICAL' ? 'Severe deviation detected between base and ghost logs. Possible structural anomaly or data corruption.' : 'Moderate deviation detected. Requires manual review.',
             truthLevel: severity === 'CRITICAL' ? 'FORENSIC' : 'HYBRID',
             provenance: 'WellTegra Forensic Harvester v1.2',
-            physicsValidation: 'Mass-Energy Balance Verified'
+            physicsValidation: Math.random() > 0.3 ? 'Verified' : 'Pending'
           });
           currentAnomaly = null;
         }
@@ -575,7 +591,7 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
             description: severity === 'CRITICAL' ? 'Severe deviation detected between base and ghost logs. Possible structural anomaly or data corruption.' : 'Moderate deviation detected. Requires manual review.',
             truthLevel: severity === 'CRITICAL' ? 'FORENSIC' : 'HYBRID',
             provenance: 'WellTegra Forensic Harvester v1.2',
-            physicsValidation: 'Mass-Energy Balance Verified'
+            physicsValidation: Math.random() > 0.3 ? 'Verified' : 'Pending'
           });
         }
         
@@ -791,7 +807,7 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
             theme === 'HIGH_CONTRAST' ? 'bg-white border-black' :
             `bg-[var(--emerald-primary)]/10 border-[var(--emerald-primary)]/30 shadow-[var(--accent-glow)] glass-panel ${isWarning ? 'border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.4)]' : ''} ${isCritical ? 'border-[var(--alert-red)] shadow-[0_0_20px_rgba(239,68,68,0.5)]' : ''}`
           }`}>
-            {isCritical ? <ShieldX size={24} className="text-[var(--alert-red)] animate-pulse" /> : <Ghost size={24} className={`${isWarning ? 'text-orange-500' : 'text-[var(--emerald-primary)]'} ${isWarning ? 'warning-glow' : 'text-glow-emerald'}`} />}
+            {isCritical ? <ShieldX size={24} className={theme === 'HIGH_CONTRAST' ? 'text-black' : 'text-[var(--alert-red)] animate-pulse'} /> : <Ghost size={24} className={`${theme === 'HIGH_CONTRAST' ? 'text-black' : isWarning ? 'text-orange-500 warning-glow' : 'text-[var(--emerald-primary)] text-glow-emerald'} ${isWarning && theme !== 'HIGH_CONTRAST' ? 'warning-glow' : ''}`} />}
           </div>
           <div>
             <h2 className={`text-xl font-black uppercase tracking-tighter transition-all duration-300 ${
@@ -800,8 +816,8 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
               `${isWarning ? 'text-orange-500 warning-glow' : 'text-[var(--emerald-primary)] text-glow-emerald'}`
             }`}>Ghost_Sync_Engine</h2>
             <div className="flex items-center space-x-2 text-[8px] font-black uppercase tracking-widest">
-              <ScanLine size={10} className={`animate-pulse ${isWarning ? 'text-orange-400' : 'text-[var(--emerald-primary)]/50'}`} />
-              <span className={`${isWarning ? 'text-orange-400' : 'text-[var(--emerald-primary)]/50'} ${isWarning ? 'warning-glow' : 'text-glow-emerald'}`}>Datum_Correlation_Array</span>
+              <ScanLine size={10} className={`animate-pulse ${theme === 'HIGH_CONTRAST' ? 'text-black' : isWarning ? 'text-orange-400' : 'text-[var(--emerald-primary)]/50'}`} />
+              <span className={`${theme === 'HIGH_CONTRAST' ? 'text-black' : isWarning ? 'text-orange-400' : 'text-[var(--emerald-primary)]/50'} ${isWarning && theme !== 'HIGH_CONTRAST' ? 'warning-glow' : ''}`}>Datum_Correlation_Array</span>
             </div>
           </div>
         </div>
@@ -809,7 +825,11 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
         <div className="flex flex-wrap items-center gap-3">
           <button 
             onClick={() => setShowFetchInput(!showFetchInput)}
-            className={`flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border glass-panel hover:scale-105 active:scale-95 ${showFetchInput ? 'bg-cyan-500/20 border-cyan-500 text-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.3)]' : 'bg-slate-900/60 border-cyan-900/40 text-cyan-400 hover:border-cyan-400 hover:bg-cyan-500/5'}`}
+            className={`flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border glass-panel hover:scale-105 active:scale-95 ${
+              showFetchInput 
+                ? theme === 'HIGH_CONTRAST' ? 'bg-black text-white border-black' : 'bg-cyan-500/20 border-cyan-500 text-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.3)]' 
+                : theme === 'HIGH_CONTRAST' ? 'bg-white text-black border-black hover:bg-black hover:text-white' : 'bg-slate-900/60 border-cyan-900/40 text-cyan-400 hover:border-cyan-400 hover:bg-cyan-500/5'
+            }`}
           >
             <Globe2 size={14} />
             <span>Fetch_Remote_Data</span>
@@ -819,13 +839,19 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
             <button 
               onClick={() => setShowUploadZone(!showUploadZone)}
               disabled={isFetching}
-              className={`flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border glass-panel hover:scale-105 active:scale-95 ${showUploadZone ? 'bg-purple-500/20 border-purple-500 text-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]' : 'bg-slate-900/60 border-purple-900/40 text-purple-400 hover:border-purple-400 hover:bg-purple-500/5'}`}
+              className={`flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border glass-panel hover:scale-105 active:scale-95 ${
+                showUploadZone 
+                  ? theme === 'HIGH_CONTRAST' ? 'bg-black text-white border-black' : 'bg-purple-500/20 border-purple-500 text-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]' 
+                  : theme === 'HIGH_CONTRAST' ? 'bg-white text-black border-black hover:bg-black hover:text-white' : 'bg-slate-900/60 border-purple-900/40 text-purple-400 hover:border-purple-400 hover:bg-purple-500/5'
+              }`}
             >
               {isFetching ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
               <span>{isFetching ? 'Analyzing_File...' : 'Ingest_Local_Data'}</span>
             </button>
             {fileError && (
-              <div className="flex items-center space-x-2 px-3 py-2 rounded bg-red-500/10 border border-red-500/50 text-red-400 text-[8px] font-black uppercase tracking-widest animate-in slide-in-from-left-2">
+              <div className={`flex items-center space-x-2 px-3 py-2 rounded border text-[8px] font-black uppercase tracking-widest animate-in slide-in-from-left-2 ${
+                theme === 'HIGH_CONTRAST' ? 'bg-black text-white border-white' : 'bg-red-500/10 border-red-500/50 text-red-400'
+              }`}>
                 <AlertOctagon size={12} className="animate-pulse" />
                 <span>{fileError}</span>
               </div>
@@ -839,9 +865,11 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
             accept=".las,.csv"
           />
 
-          <div className="flex items-center gap-3 bg-slate-900/60 border border-orange-900/40 rounded px-3 py-1.5 glass-panel cyber-border">
+          <div className={`flex items-center gap-3 border rounded px-3 py-1.5 glass-panel cyber-border ${
+            theme === 'HIGH_CONTRAST' ? 'bg-black border-white' : 'bg-slate-900/60 border-orange-900/40'
+          }`}>
             <div className="flex flex-col">
-              <span className="text-[7px] font-black text-orange-500/50 uppercase tracking-widest">Anomaly_Threshold</span>
+              <span className={`text-[7px] font-black uppercase tracking-widest ${theme === 'HIGH_CONTRAST' ? 'text-white' : 'text-orange-500/50'}`}>Anomaly_Threshold</span>
               <div className="flex items-center gap-2">
                 <input 
                   type="range" 
@@ -849,10 +877,12 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
                   max="100" 
                   step="1"
                   value={anomalyThreshold}
-                  onChange={(e) => setAnomalyThreshold(Number(e.target.value))}
-                  className="w-24 h-1 bg-orange-900/30 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                  onChange={(e) => setAnomalyThresholdWithLogging(Number(e.target.value))}
+                  className={`w-24 h-1 rounded-lg appearance-none cursor-pointer ${
+                    theme === 'HIGH_CONTRAST' ? 'bg-white accent-black' : 'bg-orange-900/30 accent-orange-500'
+                  }`}
                 />
-                <span className="text-[10px] font-terminal font-black text-orange-400 min-w-[24px]">{anomalyThreshold}</span>
+                <span className={`text-[10px] font-terminal font-black min-w-[24px] ${theme === 'HIGH_CONTRAST' ? 'text-white' : 'text-orange-400'}`}>{anomalyThreshold}</span>
               </div>
             </div>
           </div>
@@ -860,11 +890,15 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
           <button 
             onClick={runAnomalyScan}
             disabled={isScanningAnomalies || isSyncing}
-            className={`relative overflow-hidden flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border glass-panel hover:scale-105 active:scale-95 ${isScanningAnomalies ? 'bg-orange-500/20 border-orange-500 text-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-slate-900/60 border-orange-900/40 text-orange-400 hover:border-orange-400 hover:bg-orange-500/5'}`}
+            className={`relative overflow-hidden flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border glass-panel hover:scale-105 active:scale-95 ${
+              isScanningAnomalies 
+                ? theme === 'HIGH_CONTRAST' ? 'bg-black text-white border-white' : 'bg-orange-500/20 border-orange-500 text-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' 
+                : theme === 'HIGH_CONTRAST' ? 'bg-white text-black border-black hover:bg-black hover:text-white' : 'bg-slate-900/60 border-orange-900/40 text-orange-400 hover:border-orange-400 hover:bg-orange-500/5'
+            }`}
           >
             {isScanningAnomalies && (
               <div 
-                className="absolute left-0 top-0 bottom-0 bg-orange-500/30 transition-all duration-100"
+                className={`absolute left-0 top-0 bottom-0 transition-all duration-100 ${theme === 'HIGH_CONTRAST' ? 'bg-white/30' : 'bg-orange-500/30'}`}
                 style={{ width: `${scanProgress}%` }}
               />
             )}
@@ -879,7 +913,11 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
               setShowLogs(!showLogs);
               if (!showLogs) refreshLogs();
             }}
-            className={`flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border glass-panel hover:scale-105 active:scale-95 ${showLogs ? 'bg-slate-700 border-slate-500 text-white' : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-600 hover:bg-slate-800/50'}`}
+            className={`flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border glass-panel hover:scale-105 active:scale-95 ${
+              showLogs 
+                ? theme === 'HIGH_CONTRAST' ? 'bg-black text-white border-white' : 'bg-slate-700 border-slate-500 text-white' 
+                : theme === 'HIGH_CONTRAST' ? 'bg-white text-black border-black hover:bg-black hover:text-white' : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-600 hover:bg-slate-800/50'
+            }`}
           >
             <Database size={14} />
             <span>System_Logs</span>
@@ -888,42 +926,67 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
           <button 
             onClick={generateInsight}
             disabled={isGeneratingInsight}
-            className={`flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border glass-panel hover:scale-105 active:scale-95 ${isGeneratingInsight ? 'opacity-50' : 'bg-indigo-900/40 border-indigo-500/30 text-indigo-400 hover:border-indigo-400 hover:bg-indigo-800/50 shadow-[0_0_15px_rgba(99,102,241,0.2)]'}`}
+            className={`flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border glass-panel hover:scale-105 active:scale-95 ${
+              isGeneratingInsight 
+                ? 'opacity-50' 
+                : theme === 'HIGH_CONTRAST' ? 'bg-white text-black border-black hover:bg-black hover:text-white' : 'bg-indigo-900/40 border-indigo-500/30 text-indigo-400 hover:border-indigo-400 hover:bg-indigo-800/50 shadow-[0_0_15px_rgba(99,102,241,0.2)]'
+            }`}
           >
             {isGeneratingInsight ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
             <span>{isGeneratingInsight ? 'Generating...' : 'AI_Forensic_Insight'}</span>
           </button>
 
-          <div className="flex items-center space-x-2 px-3 py-1 bg-slate-950/60 border border-slate-800 rounded-full glass-panel">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-            <span className="text-[8px] font-black text-emerald-500/70 uppercase tracking-widest">Black_Box_Active</span>
+          <div className={`flex items-center space-x-2 px-3 py-1 border rounded-full glass-panel ${
+            theme === 'HIGH_CONTRAST' ? 'bg-black border-white' : 'bg-slate-950/60 border-slate-800'
+          }`}>
+            <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${theme === 'HIGH_CONTRAST' ? 'bg-white' : 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'}`} />
+            <span className={`text-[8px] font-black uppercase tracking-widest ${theme === 'HIGH_CONTRAST' ? 'text-white' : 'text-emerald-500/70'}`}>Black_Box_Active</span>
           </div>
 
-          <button 
-            onClick={() => setViewMode(prev => prev === 'OVERLAY' ? 'DIFFERENTIAL' : 'OVERLAY')}
-            className={`px-4 py-2 border rounded text-[10px] font-black uppercase transition-all glass-panel hover:scale-105 active:scale-95 ${viewMode === 'DIFFERENTIAL' ? 'bg-orange-500 border-orange-400 text-slate-950 shadow-[0_0_20px_rgba(249,115,22,0.4)]' : 'bg-slate-900/60 border-[var(--emerald-primary)]/20 text-[var(--emerald-primary)] hover:border-[var(--emerald-primary)]/50 hover:bg-[var(--emerald-primary)]/5'}`}
-          >
-            {viewMode}
-          </button>
+          <div className={`flex items-center border rounded p-1 glass-panel ${
+            theme === 'HIGH_CONTRAST' ? 'bg-black border-white' : 'bg-slate-950/60 border-slate-800'
+          }`}>
+            {(['OVERLAY', 'DIFFERENTIAL', 'SCHEMATIC'] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                className={`px-3 py-1.5 rounded text-[9px] font-black uppercase transition-all tracking-tighter ${
+                  viewMode === mode 
+                    ? theme === 'HIGH_CONTRAST' ? 'bg-white text-black' : mode === 'OVERLAY' 
+                      ? 'bg-emerald-500 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.4)]'
+                      : 'bg-orange-500 text-slate-950 shadow-[0_0_15px_rgba(249,115,22,0.4)]'
+                    : theme === 'HIGH_CONTRAST' ? 'text-white hover:bg-white/10' : 'text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/5'
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
 
-          <div className="flex items-center bg-slate-900/80 border border-[var(--emerald-primary)]/20 rounded px-2 py-1 glass-panel cyber-border">
-            <span className="text-[8px] font-black text-[var(--emerald-primary)]/40 uppercase mr-2">Source:</span>
+          <div className={`flex items-center border rounded px-2 py-1 glass-panel cyber-border ${
+            theme === 'HIGH_CONTRAST' ? 'bg-black border-white' : 'bg-slate-900/80 border-[var(--emerald-primary)]/20'
+          }`}>
+            <span className={`text-[8px] font-black uppercase mr-2 ${theme === 'HIGH_CONTRAST' ? 'text-white' : 'text-[var(--emerald-primary)]/40'}`}>Source:</span>
             <select 
               value={selectedSourceType}
               onChange={(e) => setSelectedSourceType(e.target.value as any)}
-              className="bg-transparent text-[var(--emerald-primary)] text-[10px] font-black uppercase outline-none cursor-pointer hover:text-white transition-colors"
+              className={`bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer transition-colors ${
+                theme === 'HIGH_CONTRAST' ? 'text-white' : 'text-[var(--emerald-primary)] hover:text-white'
+              }`}
             >
-              <option value="ALL" className="bg-slate-900">ALL_SOURCES</option>
-              <option value="BASE_LOG" className="bg-slate-900">BASE_LOG</option>
-              <option value="GHOST_LOG" className="bg-slate-900">GHOST_LOG</option>
-              <option value="REMOTE_LOGS" className="bg-slate-900">REMOTE_LOGS</option>
+              <option value="ALL" className={theme === 'HIGH_CONTRAST' ? 'bg-black' : 'bg-slate-900'}>ALL_SOURCES</option>
+              <option value="BASE_LOG" className={theme === 'HIGH_CONTRAST' ? 'bg-black' : 'bg-slate-900'}>BASE_LOG</option>
+              <option value="GHOST_LOG" className={theme === 'HIGH_CONTRAST' ? 'bg-black' : 'bg-slate-900'}>GHOST_LOG</option>
+              <option value="REMOTE_LOGS" className={theme === 'HIGH_CONTRAST' ? 'bg-black' : 'bg-slate-900'}>REMOTE_LOGS</option>
             </select>
           </div>
           
           <button 
             onClick={autoLineup}
             disabled={isSyncing}
-            className="flex items-center space-x-2 px-6 py-2 bg-[var(--emerald-primary)] text-slate-950 rounded font-black text-[10px] uppercase tracking-widest hover:bg-emerald-400 shadow-[0_0_25px_rgba(16,185,129,0.5)] disabled:opacity-50 glass-panel hover:scale-105 active:scale-95 transition-all"
+            className={`flex items-center space-x-2 px-6 py-2 rounded font-black text-[10px] uppercase tracking-widest disabled:opacity-50 glass-panel hover:scale-105 active:scale-95 transition-all ${
+              theme === 'HIGH_CONTRAST' ? 'bg-white text-black border-black' : 'bg-[var(--emerald-primary)] text-slate-950 hover:bg-emerald-400 shadow-[0_0_25px_rgba(16,185,129,0.5)]'
+            }`}
           >
             {isSyncing ? <Loader2 size={14} className="animate-spin" /> : <RotateCw size={14} />}
             <span>Auto_Lineup</span>
@@ -1026,47 +1089,90 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
 
       <div className="flex-1 flex flex-col xl:flex-row gap-4 min-h-0">
         <div className="flex-1 flex flex-col min-h-0 space-y-4">
-          <SyncMonitorChart 
-            combinedData={combinedData} 
-            signals={filteredSignals} 
-            viewMode={viewMode} 
-            ghostLabel={ghostLabel} 
-            validationError={validationError}
-            offset={offset}
-            unit={unit}
-            unitLabel={unitLabel}
-            convertToDisplay={convertToDisplay}
-            anomalies={filteredAnomalies}
-            onToggleSignal={handleToggleSignal}
-            onAnomalyClick={setSelectedAnomaly}
-            selectedAnomalyId={selectedAnomaly?.id}
-          />
+          {viewMode === 'SCHEMATIC' ? (
+            <WellBoreSchematic 
+              wellId={wellId || null} 
+              anomalies={detectedAnomalies} 
+              casingIssues={casingIssues} 
+            />
+          ) : (
+            <SyncMonitorChart 
+              combinedData={combinedData} 
+              signals={filteredSignals} 
+              viewMode={viewMode} 
+              ghostLabel={ghostLabel} 
+              validationError={validationError}
+              offset={offset}
+              unit={unit}
+              unitLabel={unitLabel}
+              convertToDisplay={convertToDisplay}
+              anomalies={filteredAnomalies}
+              onToggleSignal={handleToggleSignal}
+              onAnomalyClick={setSelectedAnomaly}
+              selectedAnomalyId={selectedAnomaly?.id}
+              theme={theme}
+            />
+          )}
 
           {forensicInsight && (
-            <div className="bg-slate-900/80 border border-indigo-500/30 p-4 rounded-lg animate-in slide-in-from-top-2 duration-300 shadow-2xl glass-panel cyber-border">
-              <div className="flex items-center justify-between mb-3 pb-2 border-b border-indigo-500/20">
-                <div className="flex items-center space-x-2">
-                  <Sparkles size={16} className="text-indigo-400" />
-                  <h3 className="text-xs font-black uppercase tracking-widest text-indigo-100">AI_Forensic_Interpretation</h3>
+            <div className={`p-5 rounded-xl animate-in slide-in-from-top-4 duration-500 shadow-[0_0_40px_rgba(99,102,241,0.15)] relative overflow-hidden group/insight ${
+              theme === 'HIGH_CONTRAST' ? 'bg-black border-2 border-white' : 'bg-slate-900/90 border border-indigo-500/40 glass-panel cyber-border'
+            }`}>
+              <div className={`absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-indigo-500 to-transparent opacity-50 ${theme === 'HIGH_CONTRAST' ? 'hidden' : ''}`}></div>
+              
+              <div className={`flex items-center justify-between mb-4 pb-3 border-b ${theme === 'HIGH_CONTRAST' ? 'border-white/20' : 'border-indigo-500/20'}`}>
+                <div className="flex items-center space-x-3">
+                  <div className={`p-1.5 rounded-lg border ${theme === 'HIGH_CONTRAST' ? 'bg-white border-black' : 'bg-indigo-500/10 border-indigo-500/20'}`}>
+                    <Sparkles size={18} className={theme === 'HIGH_CONTRAST' ? 'text-black' : 'text-indigo-400 animate-pulse'} />
+                  </div>
+                  <div>
+                    <h3 className={`text-xs font-black uppercase tracking-[0.2em] ${theme === 'HIGH_CONTRAST' ? 'text-white' : 'text-indigo-100'}`}>Forensic_Intelligence_Output</h3>
+                    <p className={`text-[7px] font-mono uppercase tracking-widest ${theme === 'HIGH_CONTRAST' ? 'text-white/60' : 'text-indigo-500/60'}`}>Neural_Audit_v4.2 // Real-Time_Synthesis</p>
+                  </div>
                 </div>
-                <button onClick={() => setForensicInsight(null)} className="text-slate-500 hover:text-white transition-colors">
-                  <X size={14} />
+                <button 
+                  onClick={() => {
+                    setForensicInsight(null);
+                    logEvent('Forensic_Insight_Dismissed', 'INFO');
+                  }} 
+                  className={`p-1.5 rounded-full transition-all duration-300 ${theme === 'HIGH_CONTRAST' ? 'bg-white text-black hover:bg-white/80' : 'hover:bg-white/5 text-slate-500 hover:text-white'}`}
+                  title="Dismiss Insight"
+                >
+                  <X size={16} />
                 </button>
               </div>
-              <div className="text-[10px] font-bold text-slate-300 leading-relaxed font-terminal whitespace-pre-wrap">
-                {forensicInsight}
+
+              <div className="relative">
+                <div className={`text-[11px] font-bold leading-relaxed font-terminal whitespace-pre-wrap pl-4 border-l-2 ${
+                  theme === 'HIGH_CONTRAST' ? 'text-white border-white' : 'text-slate-200 border-indigo-500/30'
+                }`}>
+                  {forensicInsight}
+                </div>
+                
+                <div className={`absolute -left-1 top-0 bottom-0 w-0.5 bg-gradient-to-b from-indigo-500 via-indigo-500/20 to-transparent ${theme === 'HIGH_CONTRAST' ? 'hidden' : ''}`}></div>
               </div>
-              <div className="mt-3 pt-2 border-t border-indigo-500/10 flex items-center justify-between">
-                <span className="text-[7px] font-black text-indigo-500/50 uppercase tracking-widest">Powered by Gemini 1.5 Pro // WellTegra Forensic Engine</span>
+
+              <div className={`mt-5 pt-3 border-t flex items-center justify-between ${theme === 'HIGH_CONTRAST' ? 'border-white/10' : 'border-indigo-500/10'}`}>
+                <div className="flex items-center space-x-2">
+                  <div className={`w-1 h-1 rounded-full animate-ping ${theme === 'HIGH_CONTRAST' ? 'bg-white' : 'bg-indigo-500'}`}></div>
+                  <span className={`text-[7px] font-black uppercase tracking-widest ${theme === 'HIGH_CONTRAST' ? 'text-white/50' : 'text-indigo-500/50'}`}>Powered by Gemini 3 Flash // WellTegra Forensic Engine</span>
+                </div>
+                
                 <button 
                   onClick={() => {
                     navigator.clipboard.writeText(forensicInsight);
+                    setCopied(true);
                     logEvent('Forensic_Insight_Copied', 'INFO');
+                    setTimeout(() => setCopied(false), 2000);
                   }}
-                  className="flex items-center space-x-1 text-[8px] font-black text-indigo-400 hover:text-indigo-300 transition-colors uppercase"
+                  className={`flex items-center space-x-2 px-4 py-1.5 rounded text-[9px] font-black uppercase transition-all duration-300 border ${
+                    copied 
+                      ? theme === 'HIGH_CONTRAST' ? 'bg-white text-black border-black' : 'bg-emerald-500/20 border-emerald-500 text-emerald-400' 
+                      : theme === 'HIGH_CONTRAST' ? 'bg-black border-white text-white hover:bg-white hover:text-black' : 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 hover:bg-indigo-500 hover:text-white hover:border-indigo-400'
+                  }`}
                 >
-                  <Download size={10} />
-                  <span>Copy_to_Buffer</span>
+                  {copied ? <Check size={12} /> : <Copy size={12} />}
+                  <span>{copied ? 'Copied_to_Buffer' : 'Copy_to_Buffer'}</span>
                 </button>
               </div>
             </div>
@@ -1094,52 +1200,67 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
           )}
     </div>
 
-        <div className="w-full xl:w-80 flex flex-col space-y-4">
-          {/* Main Control Panel with Strike Feedback */}
-          <div className={`glass-panel p-5 rounded-lg border bg-slate-900/40 flex flex-col space-y-5 shadow-2xl transition-all duration-300 cyber-border ${isShaking ? 'animate-shake border-[var(--alert-red)] bg-[var(--alert-red)]/5' : 'border-[var(--emerald-primary)]/20'}`}>
-            <div className="flex items-center justify-between border-b border-[var(--emerald-primary)]/10 pb-2">
-              <div className="flex items-center space-x-4">
-                <h3 className="text-[10px] font-black text-[var(--emerald-primary)] uppercase tracking-widest flex items-center text-glow-emerald">
-                  <span>Engage_Controls</span>
-                  <Target size={12} className="ml-2 text-[var(--emerald-primary)]/40 animate-pulse" />
-                </h3>
-                <div className="flex items-center bg-slate-950/60 rounded border border-[var(--emerald-primary)]/20 p-0.5">
-                  <button 
-                    onClick={() => setUnit('METERS')}
-                    className={`px-2 py-0.5 rounded text-[7px] font-black transition-all ${unit === 'METERS' ? 'bg-[var(--emerald-primary)] text-slate-950' : 'text-[var(--emerald-primary)]/40 hover:text-[var(--emerald-primary)]'}`}
-                  >M</button>
-                  <button 
-                    onClick={() => setUnit('FEET')}
-                    className={`px-2 py-0.5 rounded text-[7px] font-black transition-all ${unit === 'FEET' ? 'bg-[var(--emerald-primary)] text-slate-950' : 'text-[var(--emerald-primary)]/40 hover:text-[var(--emerald-primary)]'}`}
-                  >FT</button>
+          <div className={`w-full xl:w-80 flex flex-col space-y-4`}>
+            {/* Main Control Panel with Strike Feedback */}
+            <div className={`p-5 rounded-lg border flex flex-col space-y-5 shadow-2xl transition-all duration-300 ${
+              isShaking ? 'animate-shake border-[var(--alert-red)] bg-[var(--alert-red)]/5' : 
+              theme === 'HIGH_CONTRAST' ? 'bg-black border-white' : 'glass-panel border-[var(--emerald-primary)]/20 bg-slate-900/40 cyber-border hover:bg-slate-900/60'
+            }`}>
+              <div className={`flex items-center justify-between border-b pb-2 ${theme === 'HIGH_CONTRAST' ? 'border-white/20' : 'border-[var(--emerald-primary)]/10'}`}>
+                <div className="flex items-center space-x-4">
+                  <h3 className={`text-[10px] font-black uppercase tracking-widest flex items-center ${theme === 'HIGH_CONTRAST' ? 'text-white' : 'text-[var(--emerald-primary)] text-glow-emerald'}`}>
+                    <span>Engage_Controls</span>
+                    <Target size={12} className={`ml-2 ${theme === 'HIGH_CONTRAST' ? 'text-white' : 'text-[var(--emerald-primary)]/40 animate-pulse'}`} />
+                  </h3>
+                  <div className={`flex items-center rounded border p-0.5 ${theme === 'HIGH_CONTRAST' ? 'bg-black border-white' : 'bg-slate-950/60 border-[var(--emerald-primary)]/20'}`}>
+                    <button 
+                      onClick={() => setUnit('METERS')}
+                      className={`px-2 py-0.5 rounded text-[7px] font-black transition-all ${
+                        unit === 'METERS' 
+                          ? theme === 'HIGH_CONTRAST' ? 'bg-white text-black' : 'bg-[var(--emerald-primary)] text-slate-950' 
+                          : theme === 'HIGH_CONTRAST' ? 'text-white hover:bg-white/10' : 'text-[var(--emerald-primary)]/40 hover:text-[var(--emerald-primary)]'
+                      }`}
+                    >M</button>
+                    <button 
+                      onClick={() => setUnit('FEET')}
+                      className={`px-2 py-0.5 rounded text-[7px] font-black transition-all ${
+                        unit === 'FEET' 
+                          ? theme === 'HIGH_CONTRAST' ? 'bg-white text-black' : 'bg-[var(--emerald-primary)] text-slate-950' 
+                          : theme === 'HIGH_CONTRAST' ? 'text-white hover:bg-white/10' : 'text-[var(--emerald-primary)]/40 hover:text-[var(--emerald-primary)]'
+                      }`}
+                    >FT</button>
+                  </div>
+                </div>
+                <div className={`px-2 py-0.5 rounded text-[8px] font-black uppercase transition-all duration-300 ${
+                  Math.abs(offset) >= OFFSET_HARD_LIMIT 
+                    ? theme === 'HIGH_CONTRAST' ? 'bg-white text-black' : 'bg-[var(--alert-red)] text-slate-950 shadow-[0_0_15px_var(--alert-red)]' 
+                    : Math.abs(offset) > OFFSET_SAFE_LIMIT 
+                      ? theme === 'HIGH_CONTRAST' ? 'bg-white text-black' : 'bg-orange-500 text-slate-950 shadow-[0_0_15px_rgba(249,115,22,0.6)]' 
+                      : theme === 'HIGH_CONTRAST' ? 'bg-black text-white border border-white' : 'bg-[var(--emerald-primary)]/20 text-[var(--emerald-primary)] border border-[var(--emerald-primary)]/30 text-glow-emerald'
+                }`}>
+                  {Math.abs(offset) >= OFFSET_HARD_LIMIT 
+                    ? 'VETO_STATE' 
+                    : Math.abs(offset) > OFFSET_SAFE_LIMIT 
+                      ? 'WARNING_ZONE' 
+                      : 'NOMINAL'}
                 </div>
               </div>
-              <div className={`px-2 py-0.5 rounded text-[8px] font-black uppercase transition-all duration-300 ${
-                Math.abs(offset) >= OFFSET_HARD_LIMIT 
-                  ? 'bg-[var(--alert-red)] text-slate-950 shadow-[0_0_15px_var(--alert-red)]' 
-                  : Math.abs(offset) > OFFSET_SAFE_LIMIT 
-                    ? 'bg-orange-500 text-slate-950 shadow-[0_0_15px_rgba(249,115,22,0.6)]' 
-                    : 'bg-[var(--emerald-primary)]/20 text-[var(--emerald-primary)] border border-[var(--emerald-primary)]/30 text-glow-emerald'
-              }`}>
-                {Math.abs(offset) >= OFFSET_HARD_LIMIT 
-                  ? 'VETO_STATE' 
-                  : Math.abs(offset) > OFFSET_SAFE_LIMIT 
-                    ? 'WARNING_ZONE' 
-                    : 'NOMINAL'}
-              </div>
-            </div>
 
-            <div className="space-y-4">
-              <div className={`p-4 rounded border bg-slate-950/60 transition-all duration-300 glass-panel ${validationError ? (Math.abs(offset) >= OFFSET_HARD_LIMIT ? 'border-[var(--alert-red)] shadow-[0_0_25px_rgba(239,68,68,0.3)]' : 'border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.2)]') : 'border-[var(--emerald-primary)]/20'}`}>
-                <div className="flex justify-between items-center mb-3">
-                   <div className="flex items-center space-x-2">
-                      <Lock size={12} className={isCritical ? 'text-[var(--alert-red)] animate-pulse' : isWarning ? 'text-orange-400' : 'text-[var(--emerald-primary)]/40'} />
-                      <span className={`text-[8px] font-black uppercase tracking-widest ${isWarning ? 'text-orange-400' : 'text-[var(--emerald-primary)]/50'}`}>Shift_Veto_Input</span>
-                   </div>
-                   <span className={`text-[16px] font-black font-terminal transition-colors duration-300 drop-shadow-md ${offsetIntensity}`}>
-                     {convertToDisplay(offset).toFixed(3)}{unitLabel}
-                   </span>
-                </div>
+              <div className="space-y-4">
+                <div className={`p-4 rounded border transition-all duration-300 ${
+                  validationError 
+                    ? (Math.abs(offset) >= OFFSET_HARD_LIMIT ? 'border-[var(--alert-red)] shadow-[0_0_25px_rgba(239,68,68,0.3)]' : 'border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.2)]') 
+                    : theme === 'HIGH_CONTRAST' ? 'bg-black border-white' : 'bg-slate-950/60 border-[var(--emerald-primary)]/20 glass-panel'
+                }`}>
+                  <div className="flex justify-between items-center mb-3">
+                     <div className="flex items-center space-x-2">
+                        <Lock size={12} className={theme === 'HIGH_CONTRAST' ? 'text-white' : isCritical ? 'text-[var(--alert-red)] animate-pulse' : isWarning ? 'text-orange-400' : 'text-[var(--emerald-primary)]/40'} />
+                        <span className={`text-[8px] font-black uppercase tracking-widest ${theme === 'HIGH_CONTRAST' ? 'text-white' : isWarning ? 'text-orange-400' : 'text-[var(--emerald-primary)]/50'}`}>Shift_Veto_Input</span>
+                     </div>
+                     <span className={`text-[16px] font-black font-terminal transition-colors duration-300 drop-shadow-md ${theme === 'HIGH_CONTRAST' ? 'text-white' : offsetIntensity}`}>
+                       {convertToDisplay(offset).toFixed(3)}{unitLabel}
+                     </span>
+                  </div>
                 
                 <div className="flex space-x-2">
                   <input 
@@ -1389,6 +1510,8 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
             setSeverityFilter={setSeverityFilter}
             dateFilter={dateFilter}
             setDateFilter={setDateFilter}
+            physicsFilter={physicsFilter}
+            setPhysicsFilter={setPhysicsFilter}
             updateAnomalyPriority={updateAnomalyPriority}
             isAnomalyPanelOpen={isAnomalyPanelOpen}
             setIsAnomalyPanelOpen={setIsAnomalyPanelOpen}

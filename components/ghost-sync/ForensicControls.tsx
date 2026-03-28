@@ -1,5 +1,5 @@
 import React from 'react';
-import { RotateCw, Zap, AlertOctagon, Search, Play, RotateCw as ResetIcon, Lock, Target } from 'lucide-react';
+import { RotateCw, Zap, AlertOctagon, Search, Play, RotateCw as ResetIcon, Lock, Target, Loader2 } from 'lucide-react';
 
 interface ForensicControlsProps {
   offset: number;

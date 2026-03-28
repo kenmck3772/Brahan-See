@@ -1,11 +1,13 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   BarChart3, TrendingDown, TrendingUp, AlertTriangle, 
   ShieldCheck, Info, ArrowRightLeft, Activity,
-  Zap, Database, Globe, Scale
+  Zap, Database, Globe, Scale, Search, Eye, EyeOff
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, Legend } from 'recharts';
+import { useTemporal } from '../src/context/TemporalContext';
+import ProvenanceTooltip from './ProvenanceTooltip';
 
 const MOCK_SUMMARY_DATA = [
   { name: 'Stella-001', reported: 10000, audited: 8500, delta: -15, status: 'conflict' },
@@ -20,41 +22,71 @@ interface SummaryProps {
 }
 
 const ForensicDeltaSummary: React.FC<SummaryProps> = ({ selectedWellId }) => {
-  const totalReported = MOCK_SUMMARY_DATA.reduce((acc: number, curr: any) => acc + curr.reported, 0);
-  const totalAudited = MOCK_SUMMARY_DATA.reduce((acc: number, curr: any) => acc + curr.audited, 0);
+  const { year, quarter } = useTemporal();
+  const [showConflictsOnly, setShowConflictsOnly] = useState(false);
+  
+  // Simulate temporal data changes
+  const temporalData = MOCK_SUMMARY_DATA.map(item => {
+    const seed = (year - 2015) * 4 + quarter;
+    const noise = Math.sin(seed * 0.5) * 500;
+    return {
+      ...item,
+      reported: Math.max(1000, item.reported + noise),
+      audited: Math.max(800, item.audited + noise * 0.8),
+    };
+  });
+
+  const filteredData = showConflictsOnly 
+    ? temporalData.filter(d => d.status !== 'nominal') 
+    : temporalData;
+
+  const totalReported = temporalData.reduce((acc: number, curr: any) => acc + curr.reported, 0);
+  const totalAudited = temporalData.reduce((acc: number, curr: any) => acc + curr.audited, 0);
   const totalDelta = ((totalAudited - totalReported) / totalReported) * 100;
 
   return (
     <div className="flex flex-col space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
       {/* High-Level Comparison Header */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="glass-panel p-6 rounded-2xl border border-slate-800 bg-slate-900/40 cyber-border relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-            <Database size={48} className="text-slate-400" />
+        <ProvenanceTooltip 
+          source="NSTA ArcGIS Portal" 
+          validator="WellTegra Harvester v2.5" 
+          timestamp={new Date().toISOString()}
+        >
+          <div className="glass-panel p-6 rounded-2xl border border-slate-800 bg-slate-900/40 cyber-border relative overflow-hidden group w-full">
+            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Database size={48} className="text-slate-400" />
+            </div>
+            <div className="flex items-center space-x-2 mb-2">
+              <Info size={14} className="text-slate-500" />
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Truth Level 0: Public Report</span>
+            </div>
+            <div className="text-2xl font-black text-white font-mono">
+              {totalReported.toLocaleString()} <span className="text-xs text-slate-500">bbl/d</span>
+            </div>
+            <div className="text-[9px] text-slate-500 mt-1 uppercase font-bold">Aggregated NSTA/OPRED Submissions</div>
           </div>
-          <div className="flex items-center space-x-2 mb-2">
-            <Info size={14} className="text-slate-500" />
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Truth Level 0: Public Report</span>
-          </div>
-          <div className="text-2xl font-black text-white font-mono">
-            {totalReported.toLocaleString()} <span className="text-xs text-slate-500">bbl/d</span>
-          </div>
-          <div className="text-[9px] text-slate-500 mt-1 uppercase font-bold">Aggregated NSTA/OPRED Submissions</div>
-        </div>
+        </ProvenanceTooltip>
 
-        <div className="glass-panel p-6 rounded-2xl border border-[var(--emerald-primary)]/30 bg-[var(--emerald-primary)]/5 cyber-border relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-            <ShieldCheck size={48} className="text-[var(--emerald-primary)]" />
+        <ProvenanceTooltip 
+          source="WellTegra Forensic Physics Engine" 
+          validator="Brahan Seer v.92" 
+          timestamp={new Date().toISOString()}
+        >
+          <div className="glass-panel p-6 rounded-2xl border border-[var(--emerald-primary)]/30 bg-[var(--emerald-primary)]/5 cyber-border relative overflow-hidden group w-full">
+            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <ShieldCheck size={48} className="text-[var(--emerald-primary)]" />
+            </div>
+            <div className="flex items-center space-x-2 mb-2">
+              <ShieldCheck size={14} className="text-[var(--emerald-primary)]" />
+              <span className="text-[10px] font-black text-[var(--emerald-primary)] uppercase tracking-widest">Truth Level 1: WellTegra Forensic</span>
+            </div>
+            <div className="text-2xl font-black text-[var(--emerald-primary)] font-mono text-glow-emerald">
+              {totalAudited.toLocaleString()} <span className="text-xs text-emerald-700">bbl/d</span>
+            </div>
+            <div className="text-[9px] text-emerald-700 mt-1 uppercase font-bold">Physics-Anchored Mass-Balance Audit</div>
           </div>
-          <div className="flex items-center space-x-2 mb-2">
-            <ShieldCheck size={14} className="text-[var(--emerald-primary)]" />
-            <span className="text-[10px] font-black text-[var(--emerald-primary)] uppercase tracking-widest">Truth Level 1: WellTegra Forensic</span>
-          </div>
-          <div className="text-2xl font-black text-[var(--emerald-primary)] font-mono text-glow-emerald">
-            {totalAudited.toLocaleString()} <span className="text-xs text-emerald-700">bbl/d</span>
-          </div>
-          <div className="text-[9px] text-emerald-700 mt-1 uppercase font-bold">Physics-Anchored Mass-Balance Audit</div>
-        </div>
+        </ProvenanceTooltip>
 
         <div className={`glass-panel p-6 rounded-2xl border ${totalDelta < -5 ? 'border-red-500/30 bg-red-500/5' : 'border-emerald-500/30 bg-emerald-500/5'} cyber-border relative overflow-hidden group`}>
           <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -78,9 +110,18 @@ const ForensicDeltaSummary: React.FC<SummaryProps> = ({ selectedWellId }) => {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-3">
             <BarChart3 size={18} className="text-[var(--emerald-primary)]" />
-            <h3 className="text-xs font-black text-white uppercase tracking-widest">Asset-Level Truth Comparison</h3>
+            <h3 className="text-xs font-black text-white uppercase tracking-widest">Asset-Level Truth Comparison // Q{quarter} {year}</h3>
           </div>
           <div className="flex items-center space-x-4">
+            <button 
+              onClick={() => setShowConflictsOnly(!showConflictsOnly)}
+              className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg border text-[8px] font-black uppercase tracking-widest transition-all ${
+                showConflictsOnly ? 'bg-red-500/20 border-red-500/50 text-red-400' : 'bg-slate-800 border-slate-700 text-slate-500'
+              }`}
+            >
+              {showConflictsOnly ? <Eye size={12} /> : <EyeOff size={12} />}
+              <span>{showConflictsOnly ? 'Conflicts Only' : 'Show All'}</span>
+            </button>
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-slate-700 rounded-sm"></div>
               <span className="text-[8px] font-bold text-slate-500 uppercase">Reported</span>
@@ -94,7 +135,7 @@ const ForensicDeltaSummary: React.FC<SummaryProps> = ({ selectedWellId }) => {
 
         <div className="h-80 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={MOCK_SUMMARY_DATA} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <BarChart data={filteredData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
               <XAxis 
                 dataKey="name" 
@@ -118,7 +159,7 @@ const ForensicDeltaSummary: React.FC<SummaryProps> = ({ selectedWellId }) => {
               />
               <Bar dataKey="reported" fill="#334155" radius={[4, 4, 0, 0]} barSize={40} />
               <Bar dataKey="audited" radius={[4, 4, 0, 0]} barSize={40}>
-                {MOCK_SUMMARY_DATA.map((entry: any, index: number) => (
+                {filteredData.map((entry: any, index: number) => (
                   <Cell 
                     key={`cell-${index}`} 
                     fill={entry.status === 'critical' ? '#ef4444' : entry.status === 'conflict' ? '#eab308' : '#22c55e'} 
@@ -139,8 +180,8 @@ const ForensicDeltaSummary: React.FC<SummaryProps> = ({ selectedWellId }) => {
             <Activity size={18} className="text-red-500 animate-pulse" />
             <h3 className="text-xs font-black text-white uppercase tracking-widest">Real-Time Conflict Stream</h3>
           </div>
-          <div className="space-y-3">
-            {MOCK_SUMMARY_DATA.filter((d: any) => d.status !== 'nominal').map((item: any, i: number) => (
+          <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+            {temporalData.filter((d: any) => d.status !== 'nominal').map((item: any, i: number) => (
               <div key={i} className={`p-4 bg-slate-950/50 border rounded-xl flex items-center justify-between group hover:border-red-500/30 transition-all ${selectedWellId === item.name.toUpperCase() ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-slate-800'}`}>
                 <div className="flex items-center space-x-4">
                   <div className={`p-2 rounded-lg ${item.status === 'critical' ? 'bg-red-500/10 text-red-500' : 'bg-yellow-500/10 text-yellow-500'}`}>
@@ -148,11 +189,11 @@ const ForensicDeltaSummary: React.FC<SummaryProps> = ({ selectedWellId }) => {
                   </div>
                   <div>
                     <div className="text-[10px] font-black text-white uppercase">{item.name} // Discordance</div>
-                    <div className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Physics-Calculated: {item.audited} bbl/d vs Reported: {item.reported} bbl/d</div>
+                    <div className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Physics-Calculated: {item.audited.toFixed(0)} bbl/d vs Reported: {item.reported.toFixed(0)} bbl/d</div>
                   </div>
                 </div>
                 <div className={`text-xs font-black font-mono ${item.status === 'critical' ? 'text-red-500' : 'text-yellow-500'}`}>
-                  {item.delta}%
+                  {((item.audited - item.reported) / item.reported * 100).toFixed(1)}%
                 </div>
               </div>
             ))}
@@ -174,9 +215,9 @@ const ForensicDeltaSummary: React.FC<SummaryProps> = ({ selectedWellId }) => {
                 <span className="font-black uppercase tracking-widest">Validation_Active</span>
               </div>
               <p>
-                System is currently cross-referencing NSTA ArcGIS portal data with WellTegra Harvester v2.5 physics models. 
+                System is currently cross-referencing NSTA ArcGIS portal data with WellTegra Harvester v2.5 physics models for <span className="text-white">Q{quarter} {year}</span>. 
                 <br /><br />
-                <span className="text-white">Current Findings:</span> Aggregated production reports show a systematic over-reporting of ~10.2% across the Stella and Viking fields. Geolocation drift in Viking-X exceeds 15m, suggesting a potential datum-shift error in the operator's 2024 submission.
+                <span className="text-white">Current Findings:</span> Aggregated production reports show a systematic over-reporting of <span className="text-red-400">{Math.abs(totalDelta).toFixed(1)}%</span> across the Stella and Viking fields. Geolocation drift in Viking-X exceeds 15m, suggesting a potential datum-shift error in the operator's {year} submission.
                 <br /><br />
                 <span className="text-[var(--sovereign-gold)]">Recommendation:</span> Initiate Sovereign Veto Protocol for Viking-X and Stella-001.
               </p>

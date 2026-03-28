@@ -22,7 +22,7 @@ const ChanonryProtocol: React.FC = () => {
     return (sara.saturates + sara.asphaltenes) / (sara.aromatics + sara.resins);
   }, [sara]);
 
-  const isAcid = fluid.toUpperCase().includes('ACID') || fluid.toUpperCase().includes('HCL');
+  const isAcid = fluid?.toUpperCase().includes('ACID') || fluid?.toUpperCase().includes('HCL');
   const isUnstable = cii > 0.9;
   const criticalAlarm = isUnstable && isAcid;
 

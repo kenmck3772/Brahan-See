@@ -167,6 +167,16 @@ export interface NDRForensicResult {
   sha512: string;
 }
 
+export interface CasingString {
+  id: string;
+  name: string;
+  top: number;
+  bottom: number;
+  od: number;
+  weight: string;
+  grade: string;
+}
+
 export interface ForensicWell {
   id: string;
   reportedLat: number;
@@ -180,6 +190,9 @@ export interface ForensicWell {
   deviationAudit: string;
   lastAudit: string;
   forensicNote: string;
+  casingStrings?: CasingString[];
+  anomalies?: SyncAnomaly[];
+  casingIssues?: CasingIntegrityIssue[];
 }
 
 export interface SyncAnomaly {

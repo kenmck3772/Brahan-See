@@ -23,6 +23,10 @@ export async function getForensicInsight(module: string, dataSummary: string) {
       Identify potential 'Data Ghosts' or 'Mechanical Trauma'. 
       Format as a short terminal log entry.`,
       config: {
+        temperature: 0.2,
+        topP: 0.9,
+        topK: 40,
+        maxOutputTokens: 1024,
         thinkingConfig: { thinkingBudget: 0 }
       }
     });

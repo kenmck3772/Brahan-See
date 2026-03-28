@@ -190,7 +190,27 @@ export const MOCK_WELLS: ForensicWell[] = [
     field: 'Stella',
     deviationAudit: '5.2° Azimuth Drift @ 1200m',
     lastAudit: '2024-02-15',
-    forensicNote: 'Mass-balance discrepancy suggests unmetered flow or sensor drift in A-Annulus.'
+    forensicNote: 'Mass-balance discrepancy suggests unmetered flow or sensor drift in A-Annulus.',
+    casingStrings: [
+      { id: 'CS-01', name: 'Conductor', top: 0, bottom: 150, od: 30, weight: '310 lb/ft', grade: 'X-52' },
+      { id: 'CS-02', name: 'Surface Casing', top: 0, bottom: 850, od: 20, weight: '133 lb/ft', grade: 'K-55' },
+      { id: 'CS-03', name: 'Intermediate Casing', top: 0, bottom: 2200, od: 13.375, weight: '72 lb/ft', grade: 'L-80' },
+      { id: 'CS-04', name: 'Production Casing', top: 0, bottom: 3500, od: 9.625, weight: '47 lb/ft', grade: 'P-110' },
+    ],
+    anomalies: [
+      {
+        id: 'ANOM-S1',
+        startDepth: 1200,
+        endDepth: 1250,
+        avgDiff: 12.4,
+        severity: 'WARNING',
+        priority: 'MEDIUM',
+        detectedAt: '2024-02-10',
+        description: 'Azimuth drift detected in ghost log data.',
+        truthLevel: 'FORENSIC',
+        provenance: 'WellTegra Harvester'
+      }
+    ]
   },
   { 
     id: 'GANNET-A', 
@@ -201,7 +221,13 @@ export const MOCK_WELLS: ForensicWell[] = [
     field: 'Gannet',
     deviationAudit: '0.1° Azimuth Drift (Nominal)',
     lastAudit: '2024-03-01',
-    forensicNote: 'Data alignment within 2% threshold. No significant forensic discordance.'
+    forensicNote: 'Data alignment within 2% threshold. No significant forensic discordance.',
+    casingStrings: [
+      { id: 'CS-01', name: 'Conductor', top: 0, bottom: 120, od: 30, weight: '310 lb/ft', grade: 'X-52' },
+      { id: 'CS-02', name: 'Surface Casing', top: 0, bottom: 700, od: 20, weight: '133 lb/ft', grade: 'K-55' },
+      { id: 'CS-03', name: 'Intermediate Casing', top: 0, bottom: 1800, od: 13.375, weight: '72 lb/ft', grade: 'L-80' },
+      { id: 'CS-04', name: 'Production Casing', top: 0, bottom: 3000, od: 9.625, weight: '47 lb/ft', grade: 'P-110' },
+    ]
   },
   { 
     id: 'VIKING-X', 
@@ -212,6 +238,27 @@ export const MOCK_WELLS: ForensicWell[] = [
     field: 'Viking',
     deviationAudit: '12.8° Vertical Deviation @ 850m',
     lastAudit: '2024-01-20',
-    forensicNote: 'Critical structural autopsy required. Casing integrity compromised by tectonic shift.'
+    forensicNote: 'Critical structural autopsy required. Casing integrity compromised by tectonic shift.',
+    casingStrings: [
+      { id: 'CS-01', name: 'Conductor', top: 0, bottom: 120, od: 30, weight: '310 lb/ft', grade: 'X-52' },
+      { id: 'CS-02', name: 'Surface Casing', top: 0, bottom: 700, od: 20, weight: '133 lb/ft', grade: 'K-55' },
+      { id: 'CS-03', name: 'Intermediate Casing', top: 0, bottom: 1800, od: 13.375, weight: '72 lb/ft', grade: 'L-80' },
+      { id: 'CS-04', name: 'Production Casing', top: 0, bottom: 3000, od: 9.625, weight: '47 lb/ft', grade: 'P-110' },
+    ],
+    casingIssues: [
+      {
+        id: 'CAS-V1',
+        depth: 850,
+        type: 'DEFORMATION',
+        severity: 'CRITICAL',
+        value: 15.2,
+        unit: 'mm',
+        description: 'Tectonic shift caused severe casing deformation.',
+        timestamp: '2024-01-15',
+        provenance: 'WellTegra Physics Engine',
+        physicsValidation: 'Verified',
+        truthLevel: 'FORENSIC'
+      }
+    ]
   },
 ];

@@ -39,7 +39,7 @@ const ForensicDeltaMap: React.FC<ForensicDeltaMapProps> = ({ highlightedField, u
           // Filter logs relevant to this wellbore
           // Heuristic: check if well ID or field name is in description
           const filtered = allLogs.filter(log => {
-            const desc = log.description.toLowerCase();
+            const desc = log.description?.toLowerCase() || '';
             const wellId = selectedWell.toLowerCase();
             const field = well?.field.toLowerCase() || '';
             

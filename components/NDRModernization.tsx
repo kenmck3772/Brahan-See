@@ -30,7 +30,7 @@ const NDRModernization: React.FC<NDRModernizationProps> = ({
   const [showResult, setShowResult] = useState(false);
 
   // Simulation parameters for specific directives
-  const datumShift = uwi.includes('A46') ? 14.5 : 4.28; 
+  const datumShift = uwi?.includes('A46') ? 14.5 : 4.28; 
   const shaHash = `SHA512:WETE_${Math.random().toString(36).substring(2, 10).toUpperCase()}_LOCK`;
   
   const rechargeData = useMemo(() => {

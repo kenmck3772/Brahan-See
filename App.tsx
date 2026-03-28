@@ -11,6 +11,7 @@ import {
 import SovereignStage from './components/SovereignStage';
 import { UnitProvider, useUnit } from './src/context/UnitContext';
 import { HarvesterProvider, useHarvester } from './src/context/HarvesterContext';
+import { TemporalProvider } from './src/context/TemporalContext';
 import { ThemeProvider, useTheme, ThemeType } from './src/context/ThemeContext';
 
 const ThemeToggle: React.FC = () => {
@@ -211,7 +212,7 @@ const AppContent: React.FC = () => {
   return (
     <div className={`flex flex-col h-screen text-slate-300 font-sans overflow-hidden select-none transition-colors duration-500 ${
       theme === 'CLEAN' ? 'bg-slate-50 text-slate-900' : 
-      theme === 'HIGH_CONTRAST' ? 'bg-white text-black' : 
+      theme === 'HIGH_CONTRAST' ? 'bg-black text-white' : 
       'bg-[var(--slate-abyssal)] text-slate-300'
     }`}>
       {/* Subtle Watermark Background */}
@@ -227,7 +228,7 @@ const AppContent: React.FC = () => {
       {/* Sovereign Header */}
       <header className={`flex items-center justify-between px-6 py-3 border-b z-[100] relative shadow-[0_4px_30px_rgba(0,0,0,0.7)] group/header transition-all duration-500 ${
         theme === 'CLEAN' ? 'bg-white border-slate-200 shadow-sm' : 
-        theme === 'HIGH_CONTRAST' ? 'bg-white border-black shadow-none' : 
+        theme === 'HIGH_CONTRAST' ? 'bg-black border-white shadow-none' : 
         'border-[var(--emerald-primary)]/20 glass-panel'
       }`}>
         <div className="flex items-center space-x-6">
@@ -298,13 +299,13 @@ const AppContent: React.FC = () => {
         {/* Engagement Sidebar */}
         <aside className={`flex-shrink-0 ${isSidebarOpen ? 'w-72' : 'w-16'} border-r transition-all duration-300 ease-in-out relative group/sidebar z-50 flex flex-col shadow-2xl ${
           theme === 'CLEAN' ? 'bg-white border-slate-200' :
-          theme === 'HIGH_CONTRAST' ? 'bg-white border-black border-r-2' :
+          theme === 'HIGH_CONTRAST' ? 'bg-black border-white border-r-2' :
           'border-[var(--emerald-primary)]/10 glass-panel'
         }`}>
           <div className={`absolute inset-0 bg-gradient-to-b from-[var(--emerald-primary)]/5 to-transparent opacity-0 group-hover/sidebar:opacity-100 transition-opacity pointer-events-none ${theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'hidden' : ''}`}></div>
           <div className={`p-6 border-b relative z-10 transition-all ${!isSidebarOpen ? 'hidden' : ''} ${
             theme === 'CLEAN' ? 'bg-slate-50 border-slate-200' :
-            theme === 'HIGH_CONTRAST' ? 'bg-white border-black border-b-2' :
+            theme === 'HIGH_CONTRAST' ? 'bg-black border-white border-b-2' :
             'border-[var(--emerald-primary)]/10 bg-[var(--slate-abyssal)]/30'
           }`}>
             <div className="flex items-center justify-between mb-1">
@@ -454,7 +455,7 @@ const AppContent: React.FC = () => {
       {/* Persistent Taskbar */}
       <footer className={`h-14 border-t z-[100] relative flex items-center justify-between px-6 transition-all duration-500 ${
         theme === 'CLEAN' ? 'bg-white border-slate-200 shadow-sm' :
-        theme === 'HIGH_CONTRAST' ? 'bg-white border-black border-t-2 shadow-none' :
+        theme === 'HIGH_CONTRAST' ? 'bg-black border-white border-t-2 shadow-none' :
         'border-[var(--emerald-primary)]/20 glass-panel shadow-[0_-10px_40px_rgba(0,0,0,0.7)]'
       }`}>
         <div className="flex items-center space-x-4 overflow-x-auto no-scrollbar max-w-[70%] py-2">
@@ -573,14 +574,14 @@ const AppContent: React.FC = () => {
         
         /* Global Cyber-Forensic Theme Overrides */
         .glass-panel {
-          background: ${theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'white' : 'rgba(15, 23, 42, 0.85)'};
+          background: ${theme === 'CLEAN' ? 'white' : theme === 'HIGH_CONTRAST' ? 'black' : 'rgba(15, 23, 42, 0.85)'};
           backdrop-filter: ${theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'none' : 'blur(16px) saturate(180%)'};
-          border: 1px solid ${theme === 'CLEAN' ? '#e2e8f0' : theme === 'HIGH_CONTRAST' ? '#000000' : 'rgba(34, 197, 94, 0.15)'};
+          border: 1px solid ${theme === 'CLEAN' ? '#e2e8f0' : theme === 'HIGH_CONTRAST' ? '#ffffff' : 'rgba(34, 197, 94, 0.15)'};
           box-shadow: ${theme === 'CLEAN' ? '0 1px 3px rgba(0,0,0,0.1)' : theme === 'HIGH_CONTRAST' ? 'none' : '0 8px 32px rgba(0, 0, 0, 0.6)'};
         }
 
         .cyber-border {
-          border: 1px solid ${theme === 'CLEAN' ? '#e2e8f0' : theme === 'HIGH_CONTRAST' ? '#000000' : 'rgba(34, 197, 94, 0.3)'};
+          border: 1px solid ${theme === 'CLEAN' ? '#e2e8f0' : theme === 'HIGH_CONTRAST' ? '#ffffff' : 'rgba(34, 197, 94, 0.3)'};
           position: relative;
         }
 
@@ -591,8 +592,8 @@ const AppContent: React.FC = () => {
           left: -2px;
           width: 12px;
           height: 12px;
-          border-top: 3px solid ${theme === 'CLEAN' ? '#10b981' : theme === 'HIGH_CONTRAST' ? '#000000' : 'var(--emerald-primary)'};
-          border-left: 3px solid ${theme === 'CLEAN' ? '#10b981' : theme === 'HIGH_CONTRAST' ? '#000000' : 'var(--emerald-primary)'};
+          border-top: 3px solid ${theme === 'CLEAN' ? '#10b981' : theme === 'HIGH_CONTRAST' ? '#ffffff' : 'var(--emerald-primary)'};
+          border-left: 3px solid ${theme === 'CLEAN' ? '#10b981' : theme === 'HIGH_CONTRAST' ? '#ffffff' : 'var(--emerald-primary)'};
           pointer-events: none;
           z-index: 10;
           display: ${theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'none' : 'block'};
@@ -605,8 +606,8 @@ const AppContent: React.FC = () => {
           right: -2px;
           width: 12px;
           height: 12px;
-          border-bottom: 3px solid ${theme === 'CLEAN' ? '#10b981' : theme === 'HIGH_CONTRAST' ? '#000000' : 'var(--emerald-primary)'};
-          border-right: 3px solid ${theme === 'CLEAN' ? '#10b981' : theme === 'HIGH_CONTRAST' ? '#000000' : 'var(--emerald-primary)'};
+          border-bottom: 3px solid ${theme === 'CLEAN' ? '#10b981' : theme === 'HIGH_CONTRAST' ? '#ffffff' : 'var(--emerald-primary)'};
+          border-right: 3px solid ${theme === 'CLEAN' ? '#10b981' : theme === 'HIGH_CONTRAST' ? '#ffffff' : 'var(--emerald-primary)'};
           pointer-events: none;
           z-index: 10;
           display: ${theme === 'CLEAN' || theme === 'HIGH_CONTRAST' ? 'none' : 'block'};
@@ -655,9 +656,11 @@ const App: React.FC = () => {
   return (
     <UnitProvider>
       <HarvesterProvider>
-        <ThemeProvider>
-          <AppContent />
-        </ThemeProvider>
+        <TemporalProvider>
+          <ThemeProvider>
+            <AppContent />
+          </ThemeProvider>
+        </TemporalProvider>
       </HarvesterProvider>
     </UnitProvider>
   );

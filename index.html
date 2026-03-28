@@ -41,18 +41,18 @@
     }
 
     [data-theme='HIGH_CONTRAST'] {
-      --emerald-primary: #000000;
-      --alert-red: #000000;
-      --sovereign-gold: #000000;
-      --slate-abyssal: #ffffff;
-      --bg-color: #ffffff;
-      --text-color: #000000;
-      --border-color: #000000;
-      --panel-bg: #ffffff;
-      --accent-color: #000000;
+      --emerald-primary: #ffffff;
+      --alert-red: #ff0000;
+      --sovereign-gold: #ffff00;
+      --slate-abyssal: #000000;
+      --bg-color: #000000;
+      --text-color: #ffffff;
+      --border-color: #ffffff;
+      --panel-bg: #000000;
+      --accent-color: #ffffff;
       --accent-glow: transparent;
-      --panel-border: #000000;
-      --card-bg: #ffffff;
+      --panel-border: #ffffff;
+      --card-bg: #000000;
     }
 
     [data-theme='TECHNICAL'] {
@@ -176,6 +176,15 @@
     @keyframes crt-flicker {
       0% { opacity: 0.14; }
       100% { opacity: 0.16; }
+    }
+
+    @keyframes subtle-pulse {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(0.98); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    .animate-subtle-pulse {
+      animation: subtle-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     }
   </style>
 <script type="importmap">
