@@ -212,10 +212,18 @@ const ForensicDeltaMap: React.FC<ForensicDeltaMapProps> = ({ highlightedField, u
 
                   {/* Heatmap Glow */}
                   {isConflict && (
-                    <div className={`absolute inset-0 rounded-full blur-xl -z-10 transition-all duration-1000 ${well.status === 'critical' ? 'bg-red-500/40 w-24 h-24 -left-12 -top-12' : 'bg-fuchsia-500/30 w-16 h-16 -left-8 -top-8 animate-pulse'}`}></div>
+                    <div className={`absolute inset-0 rounded-full blur-2xl -z-10 transition-all duration-1000 ${
+                      well.status === 'critical' 
+                        ? 'bg-red-500/60 w-32 h-32 -left-14 -top-14 animate-pulse' 
+                        : 'bg-fuchsia-500/40 w-20 h-20 -left-8 -top-8 animate-pulse'
+                    }`}></div>
                   )}
                   
-                  <div className={`relative w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'scale-150' : 'group-hover:scale-125'} ${well.status === 'critical' ? 'bg-red-500 border-red-300' : well.status === 'conflict' ? 'bg-fuchsia-500 border-fuchsia-300' : 'bg-emerald-500 border-emerald-300'}`}>
+                  <div className={`relative w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'scale-150' : 'group-hover:scale-125'} ${
+                    well.status === 'critical' ? 'bg-red-500 border-red-300 shadow-[0_0_15px_rgba(239,68,68,0.8)]' : 
+                    well.status === 'conflict' ? 'bg-fuchsia-500 border-fuchsia-300 shadow-[0_0_15px_rgba(217,70,239,0.8)]' : 
+                    'bg-emerald-500 border-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.8)]'
+                  }`}>
                     <Target size={10} className="text-white" />
                     {isSelected && <div className="absolute inset-0 rounded-full border border-white animate-ping"></div>}
                   </div>

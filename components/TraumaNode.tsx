@@ -177,7 +177,8 @@ const TraumaNode: React.FC<TraumaNodeProps> = ({ isFocused: isFocusedProp, onTog
         throw new Error("Forensic data source is not an array. Data format mismatch.");
       }
       if (MOCK_TRAUMA_DATA.length === 0) {
-        throw new Error("Forensic data source is empty. No records available for analysis.");
+        console.warn("[TraumaNode:System] Forensic data source is empty. Awaiting data ingress.");
+        return;
       }
       
       // Check for required fields in first record

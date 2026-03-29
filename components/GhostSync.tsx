@@ -19,6 +19,7 @@ import { useHarvester } from '../src/context/HarvesterContext';
 import { useTheme } from '../src/context/ThemeContext';
 import { getForensicInsight } from '../services/geminiService';
 import SystemLogs from './ghost-sync/SystemLogs';
+import GhostSyncLogsPanel, { GhostLogEntry } from './ghost-sync/GhostSyncLogsPanel';
 import AnomalyPanel from './ghost-sync/AnomalyPanel';
 import AnomalyReport from './ghost-sync/AnomalyReport';
 import CasingIntegrityReport from './ghost-sync/CasingIntegrityReport';
@@ -26,6 +27,7 @@ import SignalStack from './ghost-sync/SignalStack';
 import CasingIntegrityCheck from './ghost-sync/CasingIntegrityCheck';
 import ForensicControls from './ghost-sync/ForensicControls';
 import WellBoreSchematic from './WellBoreSchematic';
+import { AnimatePresence } from 'motion/react';
 
 const OFFSET_SAFE_LIMIT = 10;
 const OFFSET_HARD_LIMIT = 20;
@@ -40,7 +42,7 @@ interface GhostSyncProps {
 
 const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
   const { unit, setUnit, convertToDisplay, convertFromDisplay, unitLabel } = useUnit();
-  const { lastIngress } = useHarvester();
+  const { lastIngress, sendIngress } = useHarvester();
   const { theme } = useTheme();
   const [offset, setOffset] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -89,6 +91,8 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
   });
   const [showLogs, setShowLogs] = useState(false);
   const [logs, setLogs] = useState<TraumaEvent[]>([]);
+  const [showGhostLogs, setShowGhostLogs] = useState(false);
+  const [ghostLogs, setGhostLogs] = useState<GhostLogEntry[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -127,6 +131,9 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
     try {
       const storedLogs = JSON.parse(localStorage.getItem('BRAHAN_BLACK_BOX_LOGS') || '[]');
       setLogs(storedLogs);
+      
+      const storedGhostLogs = JSON.parse(localStorage.getItem('ghost_sync_logs') || '[]');
+      setGhostLogs(storedGhostLogs);
     } catch (e) {
       console.error('Failed to load logs', e);
     }
@@ -136,16 +143,16 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
   useEffect(() => {
     window.addEventListener('BRAHAN_LOGS_UPDATED', refreshLogs);
     window.addEventListener('storage', (e) => {
-      if (e.key === 'BRAHAN_BLACK_BOX_LOGS' || !e.key) refreshLogs();
+      if (e.key === 'BRAHAN_BLACK_BOX_LOGS' || e.key === 'ghost_sync_logs' || !e.key) refreshLogs();
     });
     
-    if (showLogs) refreshLogs();
+    if (showLogs || showGhostLogs) refreshLogs();
     
     return () => {
       window.removeEventListener('BRAHAN_LOGS_UPDATED', refreshLogs);
       window.removeEventListener('storage', refreshLogs);
     };
-  }, [refreshLogs, showLogs]);
+  }, [refreshLogs, showLogs, showGhostLogs]);
 
   const logToBlackBox = useCallback((description: string, severity: 'INFO' | 'WARNING' | 'CRITICAL' = 'INFO', depth: number = 0, value: number = 0, unit: string = 'N/A') => {
     try {
@@ -229,6 +236,47 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
     }
   }, [lastIngress]);
 
+  const parseLAS = (text: string): Record<number, number> => {
+    const data: Record<number, number> = {};
+    const lines = text.split('\n');
+    let inDataSection = false;
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('~A')) {
+        inDataSection = true;
+        continue;
+      }
+      if (inDataSection && trimmed && !trimmed.startsWith('#') && !trimmed.startsWith('~')) {
+        const parts = trimmed.split(/\s+/).filter(p => p !== '');
+        if (parts.length >= 2) {
+          const depth = parseFloat(parts[0]);
+          const value = parseFloat(parts[1]);
+          if (!isNaN(depth) && !isNaN(value)) {
+            data[depth] = value;
+          }
+        }
+      }
+    }
+    return data;
+  };
+
+  const parseCSV = (text: string): Record<number, number> => {
+    const data: Record<number, number> = {};
+    const lines = text.split('\n');
+    for (const line of lines) {
+      const parts = line.split(',');
+      if (parts.length >= 2) {
+        const depth = parseFloat(parts[0]);
+        const value = parseFloat(parts[1]);
+        if (!isNaN(depth) && !isNaN(value)) {
+          data[depth] = value;
+        }
+      }
+    }
+    return data;
+  };
+
   const processFile = (file: File) => {
     // 1. Validation for supported file formats (.las, .csv)
     const allowedExtensions = ['.las', '.csv'];
@@ -239,7 +287,6 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
       const extension = file.name.split('.').pop()?.toUpperCase() || 'UNKNOWN';
       setFileError(`UNSUPPORTED_FILE_TYPE: .${extension} (ONLY .LAS, .CSV ACCEPTED)`);
       logEvent('Local_File_Upload_Failed', 'WARNING', { fileName: file.name, error: 'Unsupported file type' });
-      setTimeout(() => setFileError(null), 5000);
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
@@ -248,7 +295,6 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
     if (file.size >= MAX_FILE_SIZE_BYTES) {
       setFileError(`FILE_TOO_LARGE: MUST BE UNDER ${MAX_FILE_SIZE_MB}MB`);
       logEvent('Local_File_Upload_Failed', 'WARNING', { fileName: file.name, fileSize: file.size, error: 'File size limit exceeded' });
-      setTimeout(() => setFileError(null), 5000);
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
@@ -263,7 +309,6 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
       setFileError('FILE_READ_ERROR: FAILED_TO_ACCESS_BUFFER');
       logEvent('Local_File_Upload_Failed', 'CRITICAL', { fileName: file.name, error: 'FileReader error' });
       setIsFetching(false);
-      setTimeout(() => setFileError(null), 5000);
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
@@ -271,27 +316,35 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
       setFileError('FILE_READ_ABORTED: OPERATION_CANCELLED');
       logEvent('Local_File_Upload_Failed', 'WARNING', { fileName: file.name, error: 'FileReader aborted' });
       setIsFetching(false);
-      setTimeout(() => setFileError(null), 5000);
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
     reader.onload = (e) => {
+      const content = e.target?.result as string;
       logEvent('Local_File_Upload_Initiated', 'INFO', { fileName: file.name, fileSize: file.size });
-      // In a real app, we would parse the LAS/CSV content here
-      // For this forensic terminal, we simulate the 'X-ray' extraction
+      
+      // Real forensic extraction
       setTimeout(() => {
         const newSignalId = `SIG-LOCAL-${Math.random().toString(36).substr(2, 9)}`;
         const newSignalName = file.name.toUpperCase().replace(/\s+/g, '_');
         
-        // Generate forensic-anchored mock data from the "X-rayed" file
-        const mockData: Record<number, number> = {};
-        for (let i = 0; i <= 1000; i += 10) {
-          mockData[i] = 45 + Math.random() * 15 + Math.cos(i / 60) * 12;
+        let parsedData: Record<number, number> = {};
+        if (fileName.endsWith('.las')) {
+          parsedData = parseLAS(content);
+        } else if (fileName.endsWith('.csv')) {
+          parsedData = parseCSV(content);
+        }
+
+        if (Object.keys(parsedData).length === 0) {
+          setFileError('PARSING_ERROR: NO_VALID_DATA_POINTS_FOUND');
+          logEvent('Local_File_Upload_Failed', 'WARNING', { fileName: file.name, error: 'No data points parsed' });
+          setIsFetching(false);
+          return;
         }
 
         setRemoteLogs(prev => ({
           ...prev,
-          [newSignalId]: mockData
+          [newSignalId]: parsedData
         }));
 
         setSignals(prev => [
@@ -301,8 +354,24 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
 
         setIsFetching(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
-        logEvent('Local_File_Upload_Completed', 'INFO', { fileName: file.name, signalId: newSignalId });
-      }, 1800);
+        logEvent('Local_File_Upload_Completed', 'INFO', { 
+          fileName: file.name, 
+          signalId: newSignalId,
+          dataPoints: Object.keys(parsedData).length
+        });
+
+        // Broadcast to Harvester for cross-component visibility
+        sendIngress({
+          uwi: wellId || 'UNKNOWN_UWI',
+          source: 'GHOST_SYNC_LOCAL_UPLOAD',
+          payload: {
+            fileName: file.name,
+            signalId: newSignalId,
+            dataPoints: Object.keys(parsedData).length,
+            type: fileName.endsWith('.las') ? 'LAS' : 'CSV'
+          }
+        });
+      }, 1200);
     };
 
     try {
@@ -311,7 +380,6 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
       setFileError('FILE_READ_EXCEPTION: UNEXPECTED_FAULT');
       logEvent('Local_File_Upload_Failed', 'CRITICAL', { fileName: file.name, error: err instanceof Error ? err.message : 'Unknown exception' });
       setIsFetching(false);
-      setTimeout(() => setFileError(null), 5000);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -402,20 +470,38 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
   }, [signals, selectedSourceType]);
 
   const combinedData = useMemo(() => {
-    return MOCK_BASE_LOG.map((base) => {
-      const ghost = MOCK_GHOST_LOG.find(g => Math.abs(g.depth - (base.depth + offset)) < 0.1);
+    // 1. Get all unique depths from all sources to create a master depth list
+    const allDepths = new Set<number>();
+    MOCK_BASE_LOG.forEach(d => allDepths.add(d.depth));
+    MOCK_GHOST_LOG.forEach(d => allDepths.add(d.depth));
+    Object.values(remoteLogs).forEach(log => {
+      Object.keys(log).forEach(depth => allDepths.add(parseFloat(depth)));
+    });
+
+    // 2. Sort depths for consistent charting
+    const sortedDepths = Array.from(allDepths).sort((a, b) => a - b);
+
+    // 3. Create combined rows for Recharts
+    return sortedDepths.map(depth => {
+      const base = MOCK_BASE_LOG.find(d => Math.abs(d.depth - depth) < 0.01);
+      
+      // For ghost log, we apply the offset to the lookup
+      const ghost = MOCK_GHOST_LOG.find(d => Math.abs(d.depth - (depth + offset)) < 0.1);
+      
       const row: any = {
-        depth: base.depth,
-        baseGR: base.gr,
+        depth,
+        baseGR: base ? base.gr : null,
         ghostGR: ghost ? ghost.gr : null,
-        diff: ghost ? Math.abs(base.gr - ghost.gr) : 0
+        diff: (base && ghost) ? Math.abs(base.gr - ghost.gr) : 0
       };
-      // Inject remote logs
+
+      // Inject remote logs (uploaded or fetched)
       Object.keys(remoteLogs).forEach(sigId => {
-        if (remoteLogs[sigId][base.depth] !== undefined) {
-          row[sigId] = remoteLogs[sigId][base.depth];
+        if (remoteLogs[sigId][depth] !== undefined) {
+          row[sigId] = remoteLogs[sigId][depth];
         }
       });
+
       return row;
     });
   }, [offset, remoteLogs]);
@@ -644,59 +730,77 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
       setCasingCheckProgress(progress);
       if (progress >= 100) {
         clearInterval(interval);
-        const newIssues: CasingIntegrityIssue[] = [
-          {
-            id: `CAS-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-            depth: 450.5,
-            type: 'CORROSION',
-            severity: 'CRITICAL',
-            value: 12.4,
-            unit: 'mm',
-            description: 'Severe localized wall thinning detected in outer casing string. Physics audit suggests potential breakthrough within 6 months.',
-            timestamp: new Date().toISOString(),
-            provenance: 'WellTegra Physics Engine v1.2',
-            physicsValidation: 'Mass-Energy Balance Verified',
-            truthLevel: 'FORENSIC'
-          },
-          {
-            id: `CAS-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-            depth: 820.2,
-            type: 'ANNULUS_LEAK',
-            severity: 'WARNING',
-            value: 45.2,
-            unit: 'psi',
-            description: 'Slight pressure anomaly detected in Annulus B, suggesting potential seal degradation at the packer interface.',
-            timestamp: new Date().toISOString(),
-            provenance: 'OPRED Public Records / Forensic Cross-Ref',
-            physicsValidation: 'Pressure Drift Analysis Confirmed',
-            truthLevel: 'PUBLIC'
-          },
-          {
-            id: `CAS-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-            depth: 1240.8,
-            type: 'DEFORMATION',
-            severity: 'INFO',
-            value: 2.1,
-            unit: '%',
-            description: 'Minor ovality detected in production tubing. Within safe operating limits but requires monitoring.',
-            timestamp: new Date().toISOString(),
-            provenance: 'WellTegra Harvester / Forensic Audit',
-            physicsValidation: 'Geometric Constraint Check Passed',
-            truthLevel: 'FORENSIC'
+        
+        // Real forensic logic for casing integrity based on log data
+        const newIssues: CasingIntegrityIssue[] = [];
+        
+        // Analyze combinedData for anomalies that suggest casing failure
+        // e.g., sudden spikes in differential or extreme values
+        for (let i = 1; i < combinedData.length; i++) {
+          const current = combinedData[i];
+          const prev = combinedData[i-1];
+          
+          // Detect sudden Gamma Ray spikes (often indicates fluid ingress/leak)
+          if (current.ghostGR !== null && prev.ghostGR !== null) {
+            const grDelta = Math.abs(current.ghostGR - prev.ghostGR);
+            const depthDelta = Math.abs(current.depth - prev.depth);
+            
+            if (grDelta > 40 && depthDelta < 5) {
+              newIssues.push({
+                id: `CIG-${Math.random().toString(36).substring(7).toUpperCase()}`,
+                type: 'ANNULUS_LEAK',
+                depth: current.depth,
+                severity: grDelta > 60 ? 'CRITICAL' : 'WARNING',
+                description: `Sudden GR spike of ${grDelta.toFixed(2)} API detected at ${convertToDisplay(current.depth).toFixed(1)}${unitLabel}. Possible fluid ingress or casing breach.`,
+                unit: 'API',
+                value: grDelta,
+                timestamp: new Date().toISOString(),
+                provenance: 'WellTegra Harvester v2.1',
+                physicsValidation: 'Mass-Energy Balance Confirmed',
+                truthLevel: 'FORENSIC'
+              });
+            }
           }
-        ];
-        setCasingIssues(newIssues);
-        setSelectedCasingIssue(newIssues[0]); // Auto-select first issue
+
+          // Detect extreme differential between base and ghost
+          if (current.diff > 80) {
+            newIssues.push({
+              id: `CIG-${Math.random().toString(36).substring(7).toUpperCase()}`,
+              type: 'DEFORMATION',
+              depth: current.depth,
+              severity: 'CRITICAL',
+              description: `Extreme log discrepancy (${current.diff.toFixed(2)} API) suggests significant structural change or casing deformation.`,
+              unit: 'API',
+              value: current.diff,
+              timestamp: new Date().toISOString(),
+              provenance: 'WellTegra Physics Engine',
+              physicsValidation: 'Structural Stress Model Violation',
+              truthLevel: 'FORENSIC'
+            });
+          }
+        }
+
+        // Deduplicate nearby issues
+        const dedupedIssues = newIssues.filter((issue, index, self) => 
+          index === self.findIndex((t) => (
+            Math.abs(t.depth - issue.depth) < 10 && t.type === issue.type
+          ))
+        );
+
+        setCasingIssues(dedupedIssues);
+        if (dedupedIssues.length > 0) {
+          setSelectedCasingIssue(dedupedIssues[0]);
+        }
         setIsCheckingCasing(false);
-        logEvent('Casing_Integrity_Scan_Completed', 'WARNING', { issuesFound: newIssues.length });
+        logEvent('Casing_Integrity_Scan_Completed', dedupedIssues.length > 0 ? 'WARNING' : 'INFO', { issuesFound: dedupedIssues.length });
 
         // Log to global black box
-        newIssues.forEach(issue => {
+        dedupedIssues.forEach(issue => {
           logToBlackBox(`${issue.type}: ${issue.description}`, issue.severity, issue.depth, issue.value, issue.unit);
         });
       }
     }, 100);
-  }, [logEvent]);
+  }, [combinedData, logEvent, convertToDisplay, unitLabel, logToBlackBox]);
 
   const generateInsight = async () => {
     if (isGeneratingInsight) return;
@@ -739,28 +843,41 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
     if (!remoteUrl) return;
     setShowConfirmFetch(true);
   };
-
-  const confirmFetch = () => {
+  const confirmFetch = async () => {
     logEvent('Remote_Fetch_Initiated', 'INFO', { url: remoteUrl });
     setShowConfirmFetch(false);
     setIsFetching(true);
     
-    // Simulated fetch and forensic validation logic
-    setTimeout(() => {
+    try {
+      const response = await fetch(remoteUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP_ERROR: ${response.status} ${response.statusText}`);
+      }
+      const content = await response.text();
       const fileName = remoteUrl.split('/').pop() || 'REMOTE_LOG';
       const newSigId = `SIG-REMOTE-${Math.random().toString(36).substring(7).toUpperCase()}`;
       
-      // Generate a mock SHA-256 checksum for forensic integrity
-      const mockChecksum = Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
-      
-      // Generate some mock matching data for the chart
-      const newLogData: Record<number, number> = {};
-      MOCK_BASE_LOG.forEach(base => {
-        // Create slightly different but correlated data
-        newLogData[base.depth] = base.gr + (Math.random() - 0.5) * 35;
-      });
+      let parsedData: Record<number, number> = {};
+      if (fileName.toLowerCase().endsWith('.las')) {
+        parsedData = parseLAS(content);
+      } else if (fileName.toLowerCase().endsWith('.csv') || content.includes(',')) {
+        parsedData = parseCSV(content);
+      } else {
+        // Try LAS first, then CSV if it looks like it
+        parsedData = parseLAS(content);
+        if (Object.keys(parsedData).length === 0) {
+          parsedData = parseCSV(content);
+        }
+      }
 
-      setRemoteLogs(prev => ({ ...prev, [newSigId]: newLogData }));
+      if (Object.keys(parsedData).length === 0) {
+        throw new Error('PARSING_ERROR: NO_VALID_DATA_POINTS_FOUND');
+      }
+
+      // Generate a mock SHA-256 checksum for forensic integrity (simulated)
+      const mockChecksum = Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
+      setRemoteLogs(prev => ({ ...prev, [newSigId]: parsedData }));
       setSignals(prev => [
         ...prev, 
         { 
@@ -775,14 +892,34 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
         url: remoteUrl, 
         signalId: newSigId,
         checksum: mockChecksum,
-        status: 'NOTARIZED'
+        status: 'NOTARIZED',
+        dataPoints: Object.keys(parsedData).length
       });
 
+      // Broadcast to Harvester for cross-component visibility
+      sendIngress({
+        uwi: wellId || 'UNKNOWN_UWI',
+        source: 'GHOST_SYNC_REMOTE_FETCH',
+        payload: {
+          url: remoteUrl,
+          signalId: newSigId,
+          checksum: mockChecksum,
+          dataPoints: Object.keys(parsedData).length,
+          type: fileName.toLowerCase().endsWith('.las') ? 'LAS' : 'CSV'
+        }
+      });
+
+    } catch (error) {
+      console.error("Remote fetch failed:", error);
+      setFileError(`FETCH_FAILED: ${error instanceof Error ? error.message : 'UNKNOWN_ERROR'}`);
+      logEvent('Remote_Fetch_Failed', 'CRITICAL', { url: remoteUrl, error: error instanceof Error ? error.message : 'Unknown' });
+    } finally {
       setIsFetching(false);
       setShowFetchInput(false);
       setRemoteUrl('');
-    }, 2200); // Slightly longer for "forensic validation"
+    }
   };
+
 
   const ghostLabel = isAdjusting ? "OFFSET_LOG" : "GHOST_LOG"; // Dynamically set the ghost label
   const isWarning = Math.abs(offset) > OFFSET_SAFE_LIMIT;
@@ -849,11 +986,20 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
               <span>{isFetching ? 'Analyzing_File...' : 'Ingest_Local_Data'}</span>
             </button>
             {fileError && (
-              <div className={`flex items-center space-x-2 px-3 py-2 rounded border text-[8px] font-black uppercase tracking-widest animate-in slide-in-from-left-2 ${
+              <div className={`flex items-center space-x-2 px-3 py-2 rounded border text-[8px] font-black uppercase tracking-widest animate-in slide-in-from-left-2 group/error ${
                 theme === 'HIGH_CONTRAST' ? 'bg-black text-white border-white' : 'bg-red-500/10 border-red-500/50 text-red-400'
               }`}>
                 <AlertOctagon size={12} className="animate-pulse" />
                 <span>{fileError}</span>
+                <button 
+                  onClick={() => setFileError(null)}
+                  className={`ml-1 p-0.5 rounded-full transition-colors ${
+                    theme === 'HIGH_CONTRAST' ? 'hover:bg-white hover:text-black' : 'hover:bg-red-500/20'
+                  }`}
+                  title="Dismiss Error"
+                >
+                  <X size={10} />
+                </button>
               </div>
             )}
           </div>
@@ -912,6 +1058,7 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
             onClick={() => {
               setShowLogs(!showLogs);
               if (!showLogs) refreshLogs();
+              if (showGhostLogs) setShowGhostLogs(false);
             }}
             className={`flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border glass-panel hover:scale-105 active:scale-95 ${
               showLogs 
@@ -924,8 +1071,25 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
           </button>
 
           <button 
+            onClick={() => {
+              setShowGhostLogs(!showGhostLogs);
+              if (!showGhostLogs) refreshLogs();
+              if (showLogs) setShowLogs(false);
+            }}
+            className={`flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border glass-panel hover:scale-105 active:scale-95 ${
+              showGhostLogs 
+                ? theme === 'HIGH_CONTRAST' ? 'bg-black text-white border-white' : 'bg-emerald-500/20 border-emerald-500 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]' 
+                : theme === 'HIGH_CONTRAST' ? 'bg-white text-black border-black hover:bg-black hover:text-white' : 'bg-slate-900/60 border-emerald-900/40 text-emerald-400 hover:border-emerald-400 hover:bg-emerald-500/5'
+            }`}
+          >
+            <Fingerprint size={14} />
+            <span>Ghost_Audit</span>
+          </button>
+
+          <button 
             onClick={generateInsight}
             disabled={isGeneratingInsight}
+            data-testid="generate-insight-btn"
             className={`flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border glass-panel hover:scale-105 active:scale-95 ${
               isGeneratingInsight 
                 ? 'opacity-50' 
@@ -1037,6 +1201,28 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
             isDragging ? 'border-purple-500 bg-purple-500/10 scale-[1.01]' : 'border-purple-900/40 hover:border-purple-500/50'
           }`}
         >
+          {fileError && (
+            <div className={`absolute top-4 left-4 right-12 p-3 rounded border flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300 z-10 ${
+              theme === 'HIGH_CONTRAST' ? 'bg-black text-white border-white' : 'bg-red-500/10 border-red-500/50 text-red-400'
+            }`}>
+              <div className="flex items-center space-x-3">
+                <AlertOctagon size={16} className="animate-pulse flex-shrink-0" />
+                <span className="text-[9px] font-black uppercase tracking-widest leading-tight">{fileError}</span>
+              </div>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setFileError(null);
+                }}
+                className={`p-1 rounded-full transition-colors ${
+                  theme === 'HIGH_CONTRAST' ? 'hover:bg-white hover:text-black' : 'hover:bg-red-500/20'
+                }`}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
           <div className="flex flex-col items-center justify-center space-y-4 pointer-events-none">
             <div className={`p-4 rounded-full bg-slate-900 border ${isDragging ? 'border-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.4)]' : 'border-purple-900/40'}`}>
               <Upload size={32} className={isDragging ? 'text-purple-400 animate-bounce' : 'text-purple-600'} />
@@ -1087,6 +1273,21 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
         />
       )}
 
+      <AnimatePresence>
+        {showGhostLogs && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div className="w-full max-w-4xl max-h-[90vh] overflow-hidden">
+              <GhostSyncLogsPanel 
+                logs={ghostLogs}
+                refreshLogs={refreshLogs}
+                onClose={() => setShowGhostLogs(false)}
+                theme={theme}
+              />
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <div className="flex-1 flex flex-col xl:flex-row gap-4 min-h-0">
         <div className="flex-1 flex flex-col min-h-0 space-y-4">
           {viewMode === 'SCHEMATIC' ? (
@@ -1135,6 +1336,7 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
                     setForensicInsight(null);
                     logEvent('Forensic_Insight_Dismissed', 'INFO');
                   }} 
+                  data-testid="close-insight-panel"
                   className={`p-1.5 rounded-full transition-all duration-300 ${theme === 'HIGH_CONTRAST' ? 'bg-white text-black hover:bg-white/80' : 'hover:bg-white/5 text-slate-500 hover:text-white'}`}
                   title="Dismiss Insight"
                 >

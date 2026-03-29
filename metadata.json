@@ -1,6 +1,6 @@
 {
-  "name": "WellTegra - Brahan See",
-  "description": "A high-contrast cyber-forensic diagnostic engine for petrophysical wellbore analysis, identifying datum shifts, casing trauma, and annulus leaks.",
+  "name": "WellTegra - Sovereign Audit Terminal",
+  "description": "A forensic physics-anchored audit platform for oil & gas assets, integrating private audits with NSTA/NDR public data via a Personal Forensic Dashboard.",
   "requestFramePermissions": [
     "camera",
     "geolocation"

@@ -440,6 +440,7 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
                 type="monotone" 
                 dataKey="baseGR" 
                 name="BASE_LOG" 
+                className="animate-data-flow sync-monitor-line"
                 stroke={theme === 'HIGH_CONTRAST' ? '#ffffff' : "var(--emerald-primary)"} 
                 dot={renderCustomDot} 
                 strokeWidth={theme === 'HIGH_CONTRAST' ? 3 : 2} 
@@ -454,6 +455,7 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
                 type="monotone" 
                 dataKey="ghostGR" 
                 name={ghostLabel} 
+                className="animate-data-flow sync-monitor-line"
                 stroke={theme === 'HIGH_CONTRAST' ? '#ffffff' : "#FF5F1F"} 
                 dot={renderCustomDot} 
                 strokeWidth={theme === 'HIGH_CONTRAST' ? 3 : 2} 
@@ -471,6 +473,7 @@ const SyncMonitorChart: React.FC<SyncMonitorChartProps> = ({
                     type="monotone" 
                     dataKey={sig.id} 
                     name={sig.name}
+                    className="animate-data-flow sync-monitor-line"
                     stroke={theme === 'HIGH_CONTRAST' ? '#ffffff' : sig.color} 
                     dot={renderCustomDot} 
                     strokeWidth={theme === 'HIGH_CONTRAST' ? 2 : 1.5} 

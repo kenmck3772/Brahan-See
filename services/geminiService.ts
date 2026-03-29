@@ -1,5 +1,5 @@
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 
 // The Gemini API key is automatically managed by the AI Studio platform.
 // For free models, it is pre-configured in the environment.
@@ -27,7 +27,7 @@ export async function getForensicInsight(module: string, dataSummary: string) {
         topP: 0.9,
         topK: 40,
         maxOutputTokens: 1024,
-        thinkingConfig: { thinkingBudget: 0 }
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
       }
     });
     

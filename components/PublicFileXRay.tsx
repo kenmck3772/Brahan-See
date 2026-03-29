@@ -20,11 +20,25 @@ const PublicFileXRay: React.FC = () => {
   const [findings, setFindings] = useState<XRayFinding[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
 
-  const mockFiles = [
-    { id: 'NSTA-2024-STELLA', name: 'Stella_A1_Completion_Report.pdf', size: '4.2 MB', date: '2024-02-10' },
-    { id: 'OPRED-VIKING-22', name: 'Viking_X_Environmental_Audit.las', size: '12.8 MB', date: '2024-01-15' },
-    { id: 'NDR-GANNET-99', name: 'Gannet_A_Production_Log.csv', size: '1.1 MB', date: '2024-03-01' },
-  ];
+  const [mockFiles, setMockFiles] = useState<any[]>([
+    { id: 'STELLA-01', name: 'Stella_30_06a_S1_Completion_Report.pdf', size: '12.4 MB', date: '2024-02-15', source: 'NSTA' },
+    { id: 'STELLA-02', name: 'Stella_Field_Production_Audit_Q4.xlsx', size: '4.2 MB', date: '2024-01-10', source: 'NDR' },
+    { id: 'VIKING-01', name: 'Viking_Wellhead_Survey_2023.las', size: '1.8 MB', date: '2023-11-22', source: 'OPRED' },
+    { id: 'GANNET-01', name: 'Gannet_A_Pressure_Test_Log.pdf', size: '8.7 MB', date: '2024-03-01', source: 'NSTA' },
+  ]);
+
+  const queryNSTA = () => {
+    setIsScanning(true);
+    setScanProgress(0);
+    setTimeout(() => {
+      setMockFiles(prev => [
+        ...prev,
+        { id: 'ELGIN-01', name: 'Elgin_Franklin_Mass_Balance_Audit.pdf', size: '15.1 MB', date: '2024-03-28', source: 'NSTA' },
+        { id: 'SHEARWATER-01', name: 'Shearwater_Casing_Integrity_Log.pdf', size: '9.3 MB', date: '2024-03-25', source: 'NDR' },
+      ]);
+      setIsScanning(false);
+    }, 2000);
+  };
 
   const startScan = (fileId: string) => {
     setSelectedFile(fileId);
@@ -105,7 +119,10 @@ const PublicFileXRay: React.FC = () => {
             </div>
           ))}
           <div className="pt-4 border-t border-slate-800">
-            <button className="w-full py-2 border border-dashed border-slate-700 rounded-xl text-[9px] font-black text-slate-500 uppercase hover:border-blue-500/50 hover:text-blue-400 transition-all flex items-center justify-center space-x-2">
+            <button 
+              onClick={queryNSTA}
+              className="w-full py-2 border border-dashed border-slate-700 rounded-xl text-[9px] font-black text-slate-500 uppercase hover:border-blue-500/50 hover:text-blue-400 transition-all flex items-center justify-center space-x-2"
+            >
               <Search size={12} />
               <span>Query NSTA Portal</span>
             </button>

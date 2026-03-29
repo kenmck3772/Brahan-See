@@ -10,37 +10,7 @@ interface FileNode {
   children?: FileNode[];
 }
 
-const MOCK_FS: FileNode[] = [
-  { name: 'App.tsx', type: 'file', content: '// Main Application Entry\nimport React from "react";\nimport SovereignStage from "./components/SovereignStage";\n...' },
-  { name: 'constants.tsx', type: 'file', content: '// Global Mission Hub Data\nexport const GHOST_HUNTER_MISSION = {\n  MISSION_ID: "WETE_FORENSIC_MODERNIZATION",\n  STATUS: "ACTIVE",\n  ...\n};' },
-  { name: 'types.ts', type: 'file', content: '// Global TypeScript Definitions\nexport interface MissionTarget { ... }\nexport interface ForensicWell { ... }' },
-  { name: 'package.json', type: 'file', content: '{\n  "name": "brahan-personal-terminal",\n  "version": "2.5.0",\n  "dependencies": {\n    "react": "^19.2.4",\n    "recharts": "^3.7.0",\n    ...\n  }\n}' },
-  {
-    name: 'components',
-    type: 'dir',
-    children: [
-      { name: 'MissionControl.tsx', type: 'file', content: 'import React from "react";\nconst MissionControl = () => { ... }' },
-      { name: 'GhostSync.tsx', type: 'file', content: 'import React from "react";\nconst GhostSync = () => { ... }' },
-      { name: 'TraumaNode.tsx', type: 'file', content: 'import React from "react";\nconst TraumaNode = () => { ... }' },
-      { name: 'PulseAnalyzer.tsx', type: 'file', content: 'import React from "react";\nconst PulseAnalyzer = () => { ... }' },
-      { name: 'BrahanPersonalTerminal.tsx', type: 'file', content: '// You are here.\nimport React from "react";\n...' },
-    ]
-  },
-  {
-    name: 'forensic_logic',
-    type: 'dir',
-    children: [
-      { name: 'math.ts', type: 'file', content: 'export const calculateLinearRegression = (data: number[]) => { ... }' }
-    ]
-  },
-  {
-    name: 'services',
-    type: 'dir',
-    children: [
-      { name: 'geminiService.ts', type: 'file', content: 'import { GoogleGenAI } from "@google/genai";\n...' }
-    ]
-  }
-];
+const MOCK_FS: FileNode[] = [];
 
 const BrahanPersonalTerminal: React.FC = () => {
   const { theme } = useTheme();
@@ -50,7 +20,18 @@ const BrahanPersonalTerminal: React.FC = () => {
     { type: 'output', text: 'Sovereign Audit Environment Initialized.' },
     { type: 'output', text: 'Type "help" for a list of available commands.' },
   ]);
+  const [wellFiles, setWellFiles] = useState(0);
   const [input, setInput] = useState('');
+
+  useEffect(() => {
+    const handlePurge = () => {
+      setWellFiles(0);
+      setHistory(prev => [...prev, { type: 'output', text: 'SYSTEM_ALERT: Well files purged from Sovereign Vault.' }]);
+    };
+    window.addEventListener('WELL_FILES_PURGED', handlePurge);
+    return () => window.removeEventListener('WELL_FILES_PURGED', handlePurge);
+  }, []);
+
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [currentPath, setCurrentPath] = useState<string[]>([]);
@@ -108,8 +89,22 @@ const BrahanPersonalTerminal: React.FC = () => {
             <span className="text-emerald-400">rm [name]</span><span>Remove file or directory</span>
             <span className="text-emerald-400">clear</span><span>Clear terminal history</span>
             <span className="text-emerald-400">whoami</span><span>Display current user identity</span>
+            <span className="text-emerald-400">purge-well</span><span>Clear un-audited legacy well files</span>
           </div>
         ) }]);
+        break;
+
+      case 'purge-well':
+        if (wellFiles === 0) {
+          setHistory(prev => [...prev, { type: 'output', text: 'No well files found in vault.' }]);
+        } else {
+          setHistory(prev => [...prev, { type: 'output', text: `Purging ${wellFiles} well files...` }]);
+          setTimeout(() => {
+            setWellFiles(0);
+            window.dispatchEvent(new CustomEvent('WELL_FILES_PURGED'));
+            setHistory(prev => [...prev, { type: 'output', text: 'Purge complete. Sovereign Vault is clean.' }]);
+          }, 1500);
+        }
         break;
 
       case 'ls': {

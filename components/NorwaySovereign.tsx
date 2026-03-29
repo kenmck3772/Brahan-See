@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Globe, ShieldCheck, Target, Activity, 
   Database, Zap, TrendingUp, Coins, 
@@ -9,20 +9,30 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { useTheme } from '../src/context/ThemeContext';
+import { useHarvester } from '../src/context/HarvesterContext';
 
 const NorwaySovereign: React.FC = () => {
   const [isScanning, setIsScanning] = useState(false);
   const { theme } = useTheme();
-  const [scannedWells, setScannedWells] = useState<string[]>([]);
-  const [fiscalReclaim, setFiscalReclaim] = useState(0);
+  const { ingressHistory } = useHarvester();
   const [activeStrategy, setActiveStrategy] = useState('MICA_MASKING_RECOVERY');
+
+  // Derive scanned wells from harvester history (Single Source of Truth)
+  const scannedWells = useMemo(() => {
+    return Array.from(new Set(ingressHistory.map(item => item.uwi)));
+  }, [ingressHistory]);
+
+  // Calculate fiscal reclaim based on scanned assets (Simulated logic based on real data)
+  const fiscalReclaim = useMemo(() => {
+    return scannedWells.length * 12.45; // 12.45M NOK per forensic well identification
+  }, [scannedWells]);
 
   const triggerFactpagesScan = () => {
     setIsScanning(true);
+    // Simulate a crawl of the NPD Factpages API
     setTimeout(() => {
       setIsScanning(false);
-      setScannedWells(['STATFJORD_33/9_A-12', 'GULLFAKS_34/10_C-42', 'SNORRE_34/7_P-11']);
-      setFiscalReclaim(12.45); // in Million NOK
+      // We don't manually set wells here anymore, we rely on the Harvester context
     }, 2000);
   };
 

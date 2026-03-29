@@ -6,7 +6,7 @@ import {
   Map as MapIcon, Layers, Zap, Flame, Compass, 
   Radar, Target, ShieldCheck, AlertCircle, Loader2,
   Search, BarChart3, X, Terminal,
-  Ghost, Box, FileSearch, Lock, Anchor, Globe, Beaker, BookOpen, Scale // NEW ICONS
+  Ghost, Box, FileSearch, Lock, Anchor, Globe, Beaker, BookOpen, Scale, LayoutDashboard // NEW ICONS
 } from 'lucide-react';
 import SovereignStage from './components/SovereignStage';
 import { UnitProvider, useUnit } from './src/context/UnitContext';
@@ -30,6 +30,7 @@ const ThemeToggle: React.FC = () => {
         <button
           key={t.id}
           onClick={() => setTheme(t.id)}
+          data-testid={`theme-toggle-${t.id}`}
           className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg transition-all text-[10px] font-black uppercase tracking-widest ${
             theme === t.id 
               ? 'bg-[var(--emerald-primary)] text-slate-950 shadow-[0_0_10px_var(--emerald-primary)]' 
@@ -51,6 +52,7 @@ const UnitToggle: React.FC = () => {
   return (
     <button 
       onClick={toggleUnit}
+      data-testid="unit-toggle"
       className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg border transition-all group ${
         theme === 'CLEAN' ? 'bg-slate-100 border-slate-200 hover:bg-slate-200' :
         theme === 'HIGH_CONTRAST' ? 'bg-white border-black hover:bg-slate-100' :
@@ -144,6 +146,7 @@ const AppContent: React.FC = () => {
     forensicDeltaMap: false,
     forensicDeltaSummary: false,
     timeTravelSlider: false,
+    personalForensicDashboard: true,
     brahanPersonalTerminal: false,
   });
 
@@ -202,6 +205,7 @@ const AppContent: React.FC = () => {
     { id: 'forensicDeltaMap', label: 'Forensic Delta Map', icon: <MapIcon size={16} />, desc: 'Public vs Forensic Truth' },
     { id: 'forensicDeltaSummary', label: 'Forensic Delta Summary', icon: <BarChart3 size={16} />, desc: 'Report vs Real-Time Audit' },
     { id: 'timeTravelSlider', label: 'Time-Travel Slider', icon: <Activity size={16} />, desc: 'Temporal State Manager' },
+    { id: 'personalForensicDashboard', label: 'Personal Dashboard', icon: <LayoutDashboard size={16} />, desc: 'Forensic & Public Integration' },
     { id: 'brahanPersonalTerminal', label: 'Personal Terminal', icon: <Terminal size={16} />, desc: 'Forensic CLI & FS' },
   ];
 
@@ -217,11 +221,12 @@ const AppContent: React.FC = () => {
     }`}>
       {/* Subtle Watermark Background */}
       <div 
-        className="absolute inset-0 pointer-events-none opacity-[0.03] z-0 grayscale contrast-[1.2]" 
+        className="absolute inset-0 pointer-events-none opacity-[0.05] z-0 grayscale contrast-[1.1]" 
         style={{ 
-          backgroundImage: 'url("https://picsum.photos/seed/oilrig/1920/1080")', 
-          backgroundSize: 'cover',
-          backgroundPosition: 'center'
+          backgroundImage: 'url("/well-tegra-logo.jpg")', 
+          backgroundSize: 'contain',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat'
         }}
       ></div>
       
@@ -255,16 +260,7 @@ const AppContent: React.FC = () => {
                 <Fingerprint size={20} className={`${theme === 'CLEAN' ? 'text-slate-900' : theme === 'HIGH_CONTRAST' ? 'text-black' : 'text-[var(--sovereign-gold)]'} hidden`} />
              </div>
              <div className="flex flex-col">
-               <span className={`text-[11px] font-black uppercase tracking-[0.3em] transition-all ${
-                 theme === 'CLEAN' ? 'text-slate-900' :
-                 theme === 'HIGH_CONTRAST' ? 'text-black' :
-                 'text-white text-glow-emerald group-hover/header:tracking-[0.35em]'
-               }`}>Well-Tegra [WETE]</span>
-               <span className={`text-[9px] font-bold uppercase tracking-widest transition-all ${
-                 theme === 'CLEAN' ? 'text-slate-500' :
-                 theme === 'HIGH_CONTRAST' ? 'text-black' :
-                 'text-[var(--sovereign-gold)] text-glow-gold'
-               }`}>Sovereign Audit Terminal // NSTA NDR API</span>
+               {/* Text removed per user request */}
              </div>
           </div>
         </div>
@@ -281,7 +277,9 @@ const AppContent: React.FC = () => {
             <span className={`flex items-center ${theme === 'CLEAN' ? 'text-slate-900' : theme === 'HIGH_CONTRAST' ? 'text-black' : 'text-[var(--emerald-primary)] text-glow-emerald'}`}><Wifi size={14} className="mr-2" /> Connection: Verified</span>
           </div>
           <div className={`h-8 w-px ${theme === 'CLEAN' ? 'bg-slate-200' : theme === 'HIGH_CONTRAST' ? 'bg-black' : 'bg-slate-800/50'}`}></div>
-          <button className={`p-2 transition-all duration-300 border rounded group relative overflow-hidden ${
+          <button 
+            data-testid="power-btn"
+            className={`p-2 transition-all duration-300 border rounded group relative overflow-hidden ${
             theme === 'CLEAN' ? 'text-slate-400 hover:text-red-600 border-slate-200 hover:bg-red-50' :
             theme === 'HIGH_CONTRAST' ? 'text-black border-black hover:bg-slate-100' :
             'text-[var(--alert-red)]/60 hover:text-[var(--alert-red)] border-[var(--alert-red)]/20 hover:bg-[var(--alert-red)]/10 hover:border-[var(--alert-red)]/50'

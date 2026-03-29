@@ -9,13 +9,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 import { useTemporal } from '../src/context/TemporalContext';
 import ProvenanceTooltip from './ProvenanceTooltip';
 
-const MOCK_SUMMARY_DATA = [
-  { name: 'Stella-001', reported: 10000, audited: 8500, delta: -15, status: 'conflict' },
-  { name: 'Gannet-A', reported: 15000, audited: 14800, delta: -1.3, status: 'nominal' },
-  { name: 'Viking-X', reported: 5000, audited: 3200, delta: -36, status: 'critical' },
-  { name: 'Viking-Y', reported: 4500, audited: 4550, delta: 1.1, status: 'nominal' },
-  { name: 'Stella-002', reported: 8000, audited: 7200, delta: -10, status: 'conflict' },
-];
+const MOCK_SUMMARY_DATA: any[] = [];
 
 interface SummaryProps {
   selectedWellId?: string | null;

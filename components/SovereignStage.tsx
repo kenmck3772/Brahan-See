@@ -5,13 +5,14 @@ import {
   Map as MapIcon, ChevronRight, Activity, 
   ShieldAlert, Hash, Crosshair, AlertTriangle,
   Search, Loader2, Download, Terminal, BarChart3,
-  Ghost, Box, FileSearch, Lock, Anchor, Globe, Beaker, BookOpen, Scale,
+  Ghost, Box, FileSearch, Lock, Anchor, Globe, Beaker, BookOpen, Scale, LayoutDashboard,
   Maximize2, Minimize2, ExternalLink, X
 } from 'lucide-react';
 import { MissionTarget, ForensicWell } from '../types';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, AreaChart, Area } from 'recharts';
 import MissionControl from './MissionControl';
 import GhostSync from './GhostSync';
+import PersonalForensicDashboard from './PersonalForensicDashboard';
 import TraumaNode from './TraumaNode';
 import PulseAnalyzer from './PulseAnalyzer';
 import ReportsScanner from './ReportsScanner';
@@ -37,17 +38,9 @@ import { getForensicInsight } from '../services/geminiService';
 import { generateSovereignAudit, AuditData } from '../reporting/pdfEngine';
 
 
-const mockPulseData = Array.from({ length: 20 }, (_, i) => ({
-  time: i,
-  pressure: 2500 + Math.sin(i * 0.8) * 200 + Math.random() * 50,
-  limit: 2800
-}));
+const mockPulseData: any[] = [];
 
-const mockSubsidenceData = Array.from({ length: 15 }, (_, i) => ({
-  dist: i * 10,
-  error: 4.26 + Math.random() * 0.2,
-  nominal: 0
-}));
+const mockSubsidenceData: any[] = [];
 
 interface StageProps {
   engagedModules: Record<string, boolean>;
@@ -93,6 +86,7 @@ const SovereignStage: React.FC<StageProps> = ({ engagedModules, selectedTargetId
     { id: 'forensicDeltaMap', label: 'Forensic Delta Map', icon: <MapIcon size={14} />, canPopout: true },
     { id: 'forensicDeltaSummary', label: 'Forensic Delta Summary', icon: <BarChart3 size={14} />, canPopout: true },
     { id: 'timeTravelSlider', label: 'Time-Travel Slider', icon: <Activity size={14} />, canPopout: true },
+    { id: 'personalForensicDashboard', label: 'Personal Dashboard', icon: <LayoutDashboard size={14} />, canPopout: true },
     { id: 'brahanPersonalTerminal', label: 'Personal Terminal', icon: <Terminal size={14} />, canPopout: true },
   ];
 
@@ -303,6 +297,7 @@ const SovereignStage: React.FC<StageProps> = ({ engagedModules, selectedTargetId
         />
       );
       case 'forensicDeltaSummary': return wrapModule(<ForensicDeltaSummary selectedWellId={selectedWellId} />);
+      case 'personalForensicDashboard': return wrapModule(<PersonalForensicDashboard />);
       case 'timeTravelSlider': return wrapModule(<TimeTravelSlider />);
       case 'brahanPersonalTerminal': return wrapModule(<BrahanPersonalTerminal />);
       default: return null;

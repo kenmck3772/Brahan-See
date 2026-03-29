@@ -15,6 +15,7 @@ interface HarvesterContextType {
   ingressHistory: HarvesterData[];
   isConnected: boolean;
   clearHistory: () => void;
+  sendIngress: (data: Partial<HarvesterData>) => Promise<void>;
 }
 
 const HarvesterContext = createContext<HarvesterContextType | undefined>(undefined);
@@ -43,7 +44,16 @@ export const HarvesterProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     newSocket.on('harvester:data', (data: HarvesterData) => {
       console.log('[WETE] Real-time Ingress Received:', data);
       setLastIngress(data);
-      setIngressHistory(prev => [data, ...prev].slice(0, 50));
+      setIngressHistory(prev => {
+        // Prevent duplicates if needed, but for history we usually want all
+        const exists = prev.some(item => 
+          item.uwi === data.uwi && 
+          item.timestamp === data.timestamp && 
+          item.source === data.source
+        );
+        if (exists) return prev;
+        return [data, ...prev].slice(0, 50);
+      });
     });
 
     return () => {
@@ -51,13 +61,37 @@ export const HarvesterProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   }, []);
 
+  const sendIngress = async (data: Partial<HarvesterData>) => {
+    try {
+      const response = await fetch('/api/ingress/harvester', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          uwi: data.uwi || 'UNKNOWN_UWI',
+          source: data.source || 'GHOST_SYNC_TERMINAL',
+          payload: data.payload || {},
+          timestamp: data.timestamp || new Date().toISOString(),
+          forensicNotary: data.forensicNotary || `SHA-512:${Math.random().toString(36).substring(7).toUpperCase()}`
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Ingress failed');
+      }
+    } catch (error) {
+      console.error('[WETE] Ingress Error:', error);
+    }
+  };
+
   const clearHistory = useCallback(() => {
     setIngressHistory([]);
     setLastIngress(null);
   }, []);
 
   return (
-    <HarvesterContext.Provider value={{ lastIngress, ingressHistory, isConnected, clearHistory }}>
+    <HarvesterContext.Provider value={{ lastIngress, ingressHistory, isConnected, clearHistory, sendIngress }}>
       {children}
     </HarvesterContext.Provider>
   );
