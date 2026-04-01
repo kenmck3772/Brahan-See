@@ -216,6 +216,31 @@ const TraumaNode: React.FC<TraumaNodeProps> = ({ isFocused: isFocusedProp, onTog
     return () => cancelAnimationFrame(frameId);
   }, [hoveredDepth]);
 
+  // Dynamic pulsing for selected trauma points based on severity
+  useEffect(() => {
+    if (!isTargeting || !selectedLog) {
+      setPulseScale(1);
+      return;
+    }
+
+    let frameId: number;
+    const startTime = performance.now();
+    
+    // Severity-based pulse speed and intensity
+    const speed = selectedLog.severity === 'CRITICAL' ? 0.012 : selectedLog.severity === 'WARNING' ? 0.007 : 0.004;
+    const intensity = selectedLog.severity === 'CRITICAL' ? 0.35 : selectedLog.severity === 'WARNING' ? 0.18 : 0.08;
+
+    const animate = (time: number) => {
+      const elapsed = time - startTime;
+      const scale = 1 + intensity * Math.sin(elapsed * speed);
+      setPulseScale(scale);
+      frameId = requestAnimationFrame(animate);
+    };
+
+    frameId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frameId);
+  }, [isTargeting, selectedLog]);
+
   const [blackBoxLogs, setBlackBoxLogs] = useState<TraumaEvent[]>(() => {
     try {
       const saved = localStorage.getItem('BRAHAN_BLACK_BOX_LOGS');
@@ -425,12 +450,7 @@ const TraumaNode: React.FC<TraumaNodeProps> = ({ isFocused: isFocusedProp, onTog
     setIsTargeting(true); // Show HUD
     setIsGlitching(true); // Small glitch effect on chart
     setUiRevision(Date.now().toString()); // Force Plotly to update camera if needed
-
-    // Localized Cylinder Pulse animation
-    setPulseScale(stressPulseIntensity);
-    setTimeout(() => setPulseScale(1.0), 300);
-    setTimeout(() => setPulseScale(stressPulseIntensity * 0.5), 600);
-    setTimeout(() => setPulseScale(1.0), 900);
+    
     setTimeout(() => setIsGlitching(false), 500); // Clear glitch
 
     // Dynamic Sweep Animation
@@ -785,11 +805,19 @@ const TraumaNode: React.FC<TraumaNodeProps> = ({ isFocused: isFocusedProp, onTog
             const theta = (fIdx / fingerIds.length) * 2 * Math.PI;
             const r = layerRadii[dIdx][fIdx];
             
+            const isSelected = isTargeting && highlightedDepth === depth;
             const isFlashed = flashDepth === depth;
             const isNearSweep = scanSweepDepth !== null && Math.abs(depth - scanSweepDepth) < 0.2;
             
             // Apply dynamic pulse/flash for visualization
-            const finalR = isFlashed ? r + 30 * pulseScale : r;
+            let finalR = r;
+            if (isSelected) {
+              // Continuous pulse for selected trauma point
+              finalR += 25 * pulseScale;
+            } else if (isFlashed) {
+              // One-time flash for newly detected anomalies
+              finalR += 30 * pulseScale;
+            }
             
             xRow.push(finalR * Math.cos(theta));
             yRow.push(finalR * Math.sin(theta));
@@ -798,7 +826,7 @@ const TraumaNode: React.FC<TraumaNodeProps> = ({ isFocused: isFocusedProp, onTog
             const entry = processedData.find(d => d.depth === depth && d.fingerId === fId);
             const val = entry ? (entry[key] as number) : 0;
 
-            if (isFlashed) cRow.push(100 * anomalyIntensity); 
+            if (isFlashed || isSelected) cRow.push(100 * anomalyIntensity); 
             else if (isNearSweep) cRow.push(80 * anomalyIntensity); 
             else cRow.push(val);
 
@@ -811,16 +839,25 @@ const TraumaNode: React.FC<TraumaNodeProps> = ({ isFocused: isFocusedProp, onTog
               const r_down2 = layerRadii[dIdx + 2]?.[fIdx] ?? r;
               
               const r_left = layerRadii[dIdx][(fIdx - 1 + fingerIds.length) % fingerIds.length];
+              const r_left2 = layerRadii[dIdx][(fIdx - 2 + fingerIds.length) % fingerIds.length];
               const r_right = layerRadii[dIdx][(fIdx + 1) % fingerIds.length];
+              const r_right2 = layerRadii[dIdx][(fIdx + 2) % fingerIds.length];
               
-              const avgNeighborR = (r_up2 + r_up + r_down + r_down2 + r_left + r_right) / 6;
+              // Weighted average for smoother occlusion transitions
+              const avgNeighborR = (r_up2 * 0.5 + r_up + r_down + r_down2 * 0.5 + r_left + r_left2 * 0.5 + r_right + r_right2 * 0.5) / 6;
               
               // Occlusion factor: 0 (no shadow) to 1 (full shadow)
-              // Non-linear mapping to make crevices pop
-              let occ = Math.pow(Math.max(0, Math.min(1, (avgNeighborR - r) / 6)), 0.6);
+              // Enhanced non-linear mapping to make crevices and subsurface details pop
+              const diff = avgNeighborR - r;
+              let occ = Math.pow(Math.max(0, Math.min(1, diff / 8)), 0.4);
+              
+              // Add subsurface detail by looking at the local curvature (second derivative)
+              const curvature = (r_up + r_down + r_left + r_right - 4 * r);
+              const subsurfaceDetail = Math.max(0, -curvature * 0.08);
+              occ = Math.min(1, occ + subsurfaceDetail);
               
               // Depth-based darkening (simulating light falloff in deep wellbore)
-              const depthFactor = (dIdx / allDepths.length) * 0.15;
+              const depthFactor = (dIdx / allDepths.length) * 0.2;
               occ = Math.min(1, occ + depthFactor);
               
               aoRow.push(occ);
@@ -852,11 +889,11 @@ const TraumaNode: React.FC<TraumaNodeProps> = ({ isFocused: isFocusedProp, onTog
           cmax: 100,
           showscale: false,
           lighting: { 
-            ambient: ambientOcclusion ? 0.12 : 0.4, 
-            diffuse: ambientOcclusion ? 0.9 : 0.6,
-            specular: ambientOcclusion ? 2.0 : 1.5,
-            roughness: 0.15,
-            fresnel: ambientOcclusion ? 0.8 : 0.4
+            ambient: ambientOcclusion ? 0.08 : 0.4, 
+            diffuse: ambientOcclusion ? 1.0 : 0.6,
+            specular: ambientOcclusion ? 2.4 : 1.5,
+            roughness: 0.12,
+            fresnel: ambientOcclusion ? 1.2 : 0.4
           },
           lightposition: { x: 1000, y: 1000, z: 500 },
           opacity: layer === TraumaLayer.STRESS ? stressSurfaceOpacity / 100 : layerOpacities[layer] / 100,

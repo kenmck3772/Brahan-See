@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Terminal, ChevronRight, Folder, File, ArrowLeft, X, Maximize2, Minimize2 } from 'lucide-react';
 import { useTheme } from '../src/context/ThemeContext';
+import { useContextAware } from '../src/context/ContextAwareContext';
 
 interface FileNode {
   name: string;
@@ -14,6 +15,7 @@ const MOCK_FS: FileNode[] = [];
 
 const BrahanPersonalTerminal: React.FC = () => {
   const { theme } = useTheme();
+  const { logCommand, logFileOperation } = useContextAware();
   const [fs, setFs] = useState<FileNode[]>(MOCK_FS);
   const [history, setHistory] = useState<{ type: 'input' | 'output' | 'error', text: string | React.ReactNode }[]>([
     { type: 'output', text: 'BRAHAN_PERSONAL_TERMINAL v2.5.0' },
@@ -30,6 +32,14 @@ const BrahanPersonalTerminal: React.FC = () => {
     };
     window.addEventListener('WELL_FILES_PURGED', handlePurge);
     return () => window.removeEventListener('WELL_FILES_PURGED', handlePurge);
+  }, []);
+
+  useEffect(() => {
+    const handleTerminalCommand = (e: any) => {
+      handleCommand(e.detail);
+    };
+    window.addEventListener('TERMINAL_COMMAND', handleTerminalCommand);
+    return () => window.removeEventListener('TERMINAL_COMMAND', handleTerminalCommand);
   }, []);
 
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
@@ -72,6 +82,7 @@ const BrahanPersonalTerminal: React.FC = () => {
 
     setCommandHistory(prev => [trimmedCmd, ...prev]);
     setHistoryIndex(-1);
+    logCommand(trimmedCmd);
 
     const promptPath = currentPath.length === 0 ? '~' : '/' + currentPath.join('/');
     setHistory(prev => [...prev, { type: 'input', text: `brahan@sovereign:${promptPath}$ ${trimmedCmd}` }]);
@@ -192,6 +203,7 @@ const BrahanPersonalTerminal: React.FC = () => {
             });
           };
           setFs(prev => updateFs(prev, currentPath));
+          logFileOperation('mkdir', name);
           setHistory(prev => [...prev, { type: 'output', text: `Directory created: ${name}` }]);
         }
         break;
@@ -219,6 +231,7 @@ const BrahanPersonalTerminal: React.FC = () => {
             });
           };
           setFs(prev => updateFs(prev, currentPath));
+          logFileOperation('touch', name);
           setHistory(prev => [...prev, { type: 'output', text: `File created: ${name}` }]);
         }
         break;
@@ -244,6 +257,7 @@ const BrahanPersonalTerminal: React.FC = () => {
             });
           };
           setFs(prev => updateFs(prev, currentPath));
+          logFileOperation('rm', name);
           setHistory(prev => [...prev, { type: 'output', text: `Removed: ${name}` }]);
         }
         break;

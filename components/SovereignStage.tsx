@@ -16,12 +16,12 @@ import PersonalForensicDashboard from './PersonalForensicDashboard';
 import TraumaNode from './TraumaNode';
 import PulseAnalyzer from './PulseAnalyzer';
 import ReportsScanner from './ReportsScanner';
-import WellBoreSchematic from './WellBoreSchematic';
+import WellboreSchematic from './WellboreSchematic';
 import Vault from './Vault';
 import LegacyRecovery from './LegacyRecovery';
 import NorwaySovereign from './NorwaySovereign';
 import ChanonryProtocol from './ChanonryProtocol';
-import ProtocolManual from './ProtocolManual';
+import BrahanBible from './BrahanBible';
 import NDRModernization from './NDRModernization';
 import CerberusSimulator from './CerberusSimulator';
 import WETEForensicScanner from './WETEForensicScanner';
@@ -79,7 +79,7 @@ const SovereignStage: React.FC<StageProps> = ({ engagedModules, selectedTargetId
     { id: 'legacyRecovery', label: 'Legacy Recovery', icon: <Activity size={14} />, canPopout: true },
     { id: 'norwaySovereign', label: 'Norway Sovereign', icon: <ShieldAlert size={14} />, canPopout: true },
     { id: 'chanonryProtocol', label: 'Chanonry Protocol', icon: <ShieldAlert size={14} />, canPopout: true },
-    { id: 'protocolManual', label: 'Protocol Manual', icon: <ShieldAlert size={14} />, canPopout: true },
+    { id: 'brahanBible', label: 'Brahan Bible', icon: <BookOpen size={14} />, canPopout: true },
     { id: 'ndrModernization', label: 'NDR Modernization', icon: <Activity size={14} />, canPopout: true },
     { id: 'cerberusSimulator', label: 'Cerberus Simulator', icon: <ShieldAlert size={14} />, canPopout: true },
     { id: 'weteForensicScanner', label: 'WETE Forensic Scanner', icon: <Search size={14} />, canPopout: true },
@@ -266,12 +266,12 @@ const SovereignStage: React.FC<StageProps> = ({ engagedModules, selectedTargetId
       );
       case 'pulseAnalyzer': return wrapModule(<PulseAnalyzer />);
       case 'reportsScanner': return wrapModule(<ReportsScanner />);
-      case 'wellBoreSchematic': return wrapModule(<WellBoreSchematic wellId={selectedWellId} />);
+      case 'wellBoreSchematic': return wrapModule(<WellboreSchematic wellId={selectedWellId} />);
       case 'vault': return wrapModule(<Vault />);
       case 'legacyRecovery': return wrapModule(<LegacyRecovery />);
       case 'norwaySovereign': return wrapModule(<NorwaySovereign />);
       case 'chanonryProtocol': return wrapModule(<ChanonryProtocol />);
-      case 'protocolManual': return wrapModule(<ProtocolManual />);
+      case 'brahanBible': return wrapModule(<BrahanBible />);
       case 'ndrModernization': return wrapModule(<NDRModernization />);
       case 'cerberusSimulator': return wrapModule(<CerberusSimulator />);
       case 'weteForensicScanner': return wrapModule(<WETEForensicScanner />);

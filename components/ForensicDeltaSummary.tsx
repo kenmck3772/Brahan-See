@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   BarChart3, TrendingDown, TrendingUp, AlertTriangle, 
   ShieldCheck, Info, ArrowRightLeft, Activity,
@@ -7,36 +7,40 @@ import {
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, Legend } from 'recharts';
 import { useTemporal } from '../src/context/TemporalContext';
+import { useHarvester } from '../src/context/HarvesterContext';
 import ProvenanceTooltip from './ProvenanceTooltip';
 
-const MOCK_SUMMARY_DATA: any[] = [];
-
-interface SummaryProps {
-  selectedWellId?: string | null;
-}
-
-const ForensicDeltaSummary: React.FC<SummaryProps> = ({ selectedWellId }) => {
+const ForensicDeltaSummary: React.FC<{ selectedWellId?: string | null }> = ({ selectedWellId }) => {
   const { year, quarter } = useTemporal();
+  const { ingressHistory } = useHarvester();
   const [showConflictsOnly, setShowConflictsOnly] = useState(false);
   
-  // Simulate temporal data changes
-  const temporalData = MOCK_SUMMARY_DATA.map(item => {
-    const seed = (year - 2015) * 4 + quarter;
-    const noise = Math.sin(seed * 0.5) * 500;
-    return {
-      ...item,
-      reported: Math.max(1000, item.reported + noise),
-      audited: Math.max(800, item.audited + noise * 0.8),
-    };
-  });
+  // Derive summary data from Harvester Ingress History
+  const summaryData = useMemo(() => {
+    if (ingressHistory.length === 0) {
+      // Fallback mock data if no ingress yet
+      return [
+        { name: 'Stella-001', reported: 12450, audited: 10850, status: 'critical' },
+        { name: 'Viking-V1', reported: 8900, audited: 8750, status: 'nominal' },
+        { name: 'Gannet-A', reported: 15600, audited: 13200, status: 'conflict' },
+      ];
+    }
+
+    return ingressHistory.map(item => ({
+      name: item.payload?.wellName || item.uwi,
+      reported: item.payload?.reportedProd || 0,
+      audited: item.payload?.auditedProd || 0,
+      status: item.payload?.conflicts?.length > 0 ? 'critical' : 'nominal'
+    }));
+  }, [ingressHistory]);
 
   const filteredData = showConflictsOnly 
-    ? temporalData.filter(d => d.status !== 'nominal') 
-    : temporalData;
+    ? summaryData.filter(d => d.status !== 'nominal') 
+    : summaryData;
 
-  const totalReported = temporalData.reduce((acc: number, curr: any) => acc + curr.reported, 0);
-  const totalAudited = temporalData.reduce((acc: number, curr: any) => acc + curr.audited, 0);
-  const totalDelta = ((totalAudited - totalReported) / totalReported) * 100;
+  const totalReported = summaryData.reduce((acc, curr) => acc + curr.reported, 0);
+  const totalAudited = summaryData.reduce((acc, curr) => acc + curr.audited, 0);
+  const totalDelta = totalReported > 0 ? ((totalAudited - totalReported) / totalReported) * 100 : 0;
 
   return (
     <div className="flex flex-col space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -153,7 +157,7 @@ const ForensicDeltaSummary: React.FC<SummaryProps> = ({ selectedWellId }) => {
               />
               <Bar dataKey="reported" fill="#334155" radius={[4, 4, 0, 0]} barSize={40} />
               <Bar dataKey="audited" radius={[4, 4, 0, 0]} barSize={40}>
-                {filteredData.map((entry: any, index: number) => (
+                {filteredData.map((entry, index) => (
                   <Cell 
                     key={`cell-${index}`} 
                     fill={entry.status === 'critical' ? '#ef4444' : entry.status === 'conflict' ? '#eab308' : '#22c55e'} 
@@ -175,7 +179,7 @@ const ForensicDeltaSummary: React.FC<SummaryProps> = ({ selectedWellId }) => {
             <h3 className="text-xs font-black text-white uppercase tracking-widest">Real-Time Conflict Stream</h3>
           </div>
           <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-            {temporalData.filter((d: any) => d.status !== 'nominal').map((item: any, i: number) => (
+            {filteredData.filter(d => d.status !== 'nominal').map((item, i) => (
               <div key={i} className={`p-4 bg-slate-950/50 border rounded-xl flex items-center justify-between group hover:border-red-500/30 transition-all ${selectedWellId === item.name.toUpperCase() ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-slate-800'}`}>
                 <div className="flex items-center space-x-4">
                   <div className={`p-2 rounded-lg ${item.status === 'critical' ? 'bg-red-500/10 text-red-500' : 'bg-yellow-500/10 text-yellow-500'}`}>
@@ -187,7 +191,7 @@ const ForensicDeltaSummary: React.FC<SummaryProps> = ({ selectedWellId }) => {
                   </div>
                 </div>
                 <div className={`text-xs font-black font-mono ${item.status === 'critical' ? 'text-red-500' : 'text-yellow-500'}`}>
-                  {((item.audited - item.reported) / item.reported * 100).toFixed(1)}%
+                  {item.reported > 0 ? (((item.audited - item.reported) / item.reported) * 100).toFixed(1) : 0}%
                 </div>
               </div>
             ))}

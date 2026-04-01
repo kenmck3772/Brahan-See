@@ -26,8 +26,9 @@ import CasingIntegrityReport from './ghost-sync/CasingIntegrityReport';
 import SignalStack from './ghost-sync/SignalStack';
 import CasingIntegrityCheck from './ghost-sync/CasingIntegrityCheck';
 import ForensicControls from './ghost-sync/ForensicControls';
-import WellBoreSchematic from './WellBoreSchematic';
-import { AnimatePresence } from 'motion/react';
+import WellboreSchematic from './WellboreSchematic';
+import { motion, AnimatePresence } from 'motion/react';
+import ReactMarkdown from 'react-markdown';
 
 const OFFSET_SAFE_LIMIT = 10;
 const OFFSET_HARD_LIMIT = 20;
@@ -53,11 +54,14 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
   const [isShaking, setIsShaking] = useState(false);
   
   // Remote Data Fetching State
-  const [showFetchInput, setShowFetchInput] = useState(false);
-  const [showUploadZone, setShowUploadZone] = useState(false);
+  const [showIngressPanel, setShowIngressPanel] = useState(false);
+  const [activeIngressTab, setActiveIngressTab] = useState<'REMOTE' | 'LOCAL'>('REMOTE');
   const [isDragging, setIsDragging] = useState(false);
+  const [dragCounter, setDragCounter] = useState(0);
   const [remoteUrl, setRemoteUrl] = useState('');
   const [isFetching, setIsFetching] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState<'IDLE' | 'PENDING' | 'SUCCESS' | 'FAILURE'>('IDLE');
   const [showConfirmFetch, setShowConfirmFetch] = useState(false);
 
   // Anomaly Detection State
@@ -240,40 +244,87 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
     const data: Record<number, number> = {};
     const lines = text.split('\n');
     let inDataSection = false;
+    let hasVersionSection = false;
+    let hasWellSection = false;
+    let hasCurveSection = false;
     
-    for (const line of lines) {
+    if (lines.length < 5) {
+      throw new Error('LAS_PARSE_ERROR: FILE_TOO_SHORT');
+    }
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
       const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+
+      if (trimmed.startsWith('~V')) hasVersionSection = true;
+      if (trimmed.startsWith('~W')) hasWellSection = true;
+      if (trimmed.startsWith('~C')) hasCurveSection = true;
+
       if (trimmed.startsWith('~A')) {
         inDataSection = true;
         continue;
       }
-      if (inDataSection && trimmed && !trimmed.startsWith('#') && !trimmed.startsWith('~')) {
+
+      if (inDataSection) {
+        if (trimmed.startsWith('~')) {
+          inDataSection = false;
+          continue;
+        }
         const parts = trimmed.split(/\s+/).filter(p => p !== '');
-        if (parts.length >= 2) {
+        if (parts.length > 0) {
+          if (parts.length < 2) {
+            throw new Error(`LAS_PARSE_ERROR: MALFORMED_DATA_AT_LINE_${i + 1}`);
+          }
           const depth = parseFloat(parts[0]);
           const value = parseFloat(parts[1]);
-          if (!isNaN(depth) && !isNaN(value)) {
-            data[depth] = value;
+          if (isNaN(depth) || isNaN(value)) {
+            throw new Error(`LAS_PARSE_ERROR: NON_NUMERIC_DATA_AT_LINE_${i + 1}`);
           }
+          data[depth] = value;
         }
       }
     }
+
+    if (!hasVersionSection) throw new Error("LAS_PARSE_ERROR: MISSING_VERSION_SECTION");
+    if (!hasWellSection) throw new Error("LAS_PARSE_ERROR: MISSING_WELL_SECTION");
+    if (!hasCurveSection) throw new Error("LAS_PARSE_ERROR: MISSING_CURVE_SECTION");
+    if (Object.keys(data).length === 0) throw new Error("LAS_PARSE_ERROR: NO_VALID_DATA_POINTS");
+
     return data;
   };
 
   const parseCSV = (text: string): Record<number, number> => {
     const data: Record<number, number> = {};
     const lines = text.split('\n');
-    for (const line of lines) {
-      const parts = line.split(',');
-      if (parts.length >= 2) {
-        const depth = parseFloat(parts[0]);
-        const value = parseFloat(parts[1]);
-        if (!isNaN(depth) && !isNaN(value)) {
-          data[depth] = value;
-        }
+    let validLines = 0;
+    
+    if (lines.length === 0) throw new Error("CSV_PARSE_ERROR: EMPTY_FILE");
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      const parts = trimmed.split(',');
+      if (parts.length < 2) {
+        if (validLines === 0) continue; // Skip potential header
+        throw new Error(`CSV_PARSE_ERROR: MALFORMED_LINE_${i + 1}`);
       }
+
+      const depth = parseFloat(parts[0]);
+      const value = parseFloat(parts[1]);
+
+      if (isNaN(depth) || isNaN(value)) {
+        if (validLines === 0) continue; // Skip header
+        throw new Error(`CSV_PARSE_ERROR: NON_NUMERIC_DATA_AT_LINE_${i + 1}`);
+      }
+
+      data[depth] = value;
+      validLines++;
     }
+
+    if (validLines === 0) throw new Error("CSV_PARSE_ERROR: NO_VALID_DATA_POINTS");
     return data;
   };
 
@@ -301,7 +352,8 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
 
     setFileError(null); // Clear previous errors
     setIsFetching(true);
-    setShowUploadZone(false); // Close zone on success
+    setUploadStatus('PENDING');
+    setUploadProgress(0);
     
     const reader = new FileReader();
 
@@ -309,6 +361,7 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
       setFileError('FILE_READ_ERROR: FAILED_TO_ACCESS_BUFFER');
       logEvent('Local_File_Upload_Failed', 'CRITICAL', { fileName: file.name, error: 'FileReader error' });
       setIsFetching(false);
+      setUploadStatus('FAILURE');
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
@@ -316,6 +369,7 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
       setFileError('FILE_READ_ABORTED: OPERATION_CANCELLED');
       logEvent('Local_File_Upload_Failed', 'WARNING', { fileName: file.name, error: 'FileReader aborted' });
       setIsFetching(false);
+      setUploadStatus('FAILURE');
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
@@ -323,22 +377,37 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
       const content = e.target?.result as string;
       logEvent('Local_File_Upload_Initiated', 'INFO', { fileName: file.name, fileSize: file.size });
       
+      // Simulate progress
+      let currentProgress = 0;
+      const progressInterval = setInterval(() => {
+        currentProgress += Math.random() * 15;
+        if (currentProgress >= 95) {
+          clearInterval(progressInterval);
+          setUploadProgress(95);
+        } else {
+          setUploadProgress(currentProgress);
+        }
+      }, 150);
+
       // Real forensic extraction
       setTimeout(() => {
+        clearInterval(progressInterval);
         const newSignalId = `SIG-LOCAL-${Math.random().toString(36).substr(2, 9)}`;
         const newSignalName = file.name.toUpperCase().replace(/\s+/g, '_');
         
         let parsedData: Record<number, number> = {};
-        if (fileName.endsWith('.las')) {
-          parsedData = parseLAS(content);
-        } else if (fileName.endsWith('.csv')) {
-          parsedData = parseCSV(content);
-        }
-
-        if (Object.keys(parsedData).length === 0) {
-          setFileError('PARSING_ERROR: NO_VALID_DATA_POINTS_FOUND');
-          logEvent('Local_File_Upload_Failed', 'WARNING', { fileName: file.name, error: 'No data points parsed' });
+        try {
+          if (fileName.endsWith('.las')) {
+            parsedData = parseLAS(content);
+          } else if (fileName.endsWith('.csv')) {
+            parsedData = parseCSV(content);
+          }
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : 'PARSING_ERROR: UNKNOWN_FAULT';
+          setFileError(errorMessage);
+          logEvent('Local_File_Upload_Failed', 'WARNING', { fileName: file.name, error: errorMessage });
           setIsFetching(false);
+          setUploadStatus('FAILURE');
           return;
         }
 
@@ -352,8 +421,16 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
           { id: newSignalId, name: newSignalName, color: '#A855F7', visible: true }
         ]);
 
-        setIsFetching(false);
-        if (fileInputRef.current) fileInputRef.current.value = '';
+        setUploadProgress(100);
+        setUploadStatus('SUCCESS');
+        
+        setTimeout(() => {
+          setIsFetching(false);
+          setUploadStatus('IDLE');
+          setShowIngressPanel(false); // Close panel after success feedback
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }, 1500);
+
         logEvent('Local_File_Upload_Completed', 'INFO', { 
           fileName: file.name, 
           signalId: newSignalId,
@@ -380,6 +457,7 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
       setFileError('FILE_READ_EXCEPTION: UNEXPECTED_FAULT');
       logEvent('Local_File_Upload_Failed', 'CRITICAL', { fileName: file.name, error: err instanceof Error ? err.message : 'Unknown exception' });
       setIsFetching(false);
+      setUploadStatus('FAILURE');
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -389,17 +467,39 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
     if (file) processFile(file);
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    setDragCounter(prev => prev + 1);
     setIsDragging(true);
+    if (!showIngressPanel) {
+      setShowIngressPanel(true);
+      setActiveIngressTab('LOCAL');
+    }
   };
 
-  const handleDragLeave = () => {
-    setIsDragging(false);
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragCounter(prev => {
+      const next = prev - 1;
+      if (next <= 0) {
+        setIsDragging(false);
+      }
+      return next;
+    });
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    setDragCounter(0);
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
     if (file) {
@@ -719,6 +819,37 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
     }
   };
 
+  const handleGetInsight = async () => {
+    if (isGeneratingInsight) return;
+    
+    setIsGeneratingInsight(true);
+    logEvent('Forensic_Insight_Requested', 'INFO');
+    
+    try {
+      const dataSummary = `
+        Well ID: ${wellId || 'UNKNOWN'}
+        Current Offset: ${offset.toFixed(3)}m
+        Anomalies Detected: ${detectedAnomalies.length}
+        Casing Issues: ${casingIssues.length}
+        Critical Anomalies: ${detectedAnomalies.filter(a => a.severity === 'CRITICAL').length}
+        Average Deviation: ${detectedAnomalies.reduce((acc, a) => acc + a.avgDiff, 0) / (detectedAnomalies.length || 1)}
+      `;
+      
+      const insight = await getForensicInsight('GHOST_SYNC', dataSummary);
+      if (insight) {
+        setForensicInsight(insight);
+      } else {
+        setForensicInsight("ERROR: AI failed to generate a response.");
+      }
+      logEvent('Forensic_Insight_Generated', 'INFO');
+    } catch (error) {
+      console.error("Failed to generate insight:", error);
+      setForensicInsight("ERROR: Failed to synthesize forensic data. Neural link unstable.");
+    } finally {
+      setIsGeneratingInsight(false);
+    }
+  };
+
   const runCasingIntegrityCheck = useCallback(() => {
     setIsCheckingCasing(true);
     setCasingCheckProgress(0);
@@ -810,15 +941,65 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
     logEvent('Forensic_Insight_Generation_Started', 'INFO');
 
     try {
+      // Calculate statistics for the combined data
+      const totalPoints = combinedData.length;
+      const validPoints = combinedData.filter(d => d.baseGR !== null && d.ghostGR !== null);
+      const validCount = validPoints.length;
+      
+      const avgDiff = validCount > 0 ? validPoints.reduce((acc, d) => acc + d.diff, 0) / validCount : 0;
+      const maxDiff = Math.max(...combinedData.map(d => d.diff), 0);
+      
+      // Standard Deviation calculation
+      const squareDiffs = validPoints.map(d => Math.pow(d.diff - avgDiff, 2));
+      const avgSquareDiff = squareDiffs.reduce((acc, d) => acc + d, 0) / (validCount || 1);
+      const stdDev = Math.sqrt(avgSquareDiff);
+
+      // Percentage of points above threshold
+      const pointsAboveThreshold = validPoints.filter(d => d.diff > anomalyThreshold).length;
+      const percentAboveThreshold = validCount > 0 ? (pointsAboveThreshold / validCount) * 100 : 0;
+
+      // Depth range
+      const minDepth = combinedData.length > 0 ? combinedData[0].depth : 0;
+      const maxDepth = combinedData.length > 0 ? combinedData[combinedData.length - 1].depth : 0;
+      
+      // Integrity score: 100 is perfect, decreases with higher average difference
+      // A typical "good" log might have an avgDiff of < 5.
+      const integrityScore = Math.max(0, Math.min(100, 100 - (avgDiff * 4)));
+
       // Create a concise summary of the combined data for Gemini
-      const dataSummary = combinedData
+      const sampledData = combinedData
         .filter((_, i) => i % 50 === 0) // Sample data to keep it concise
         .map(d => `Depth: ${d.depth}, Base: ${d.baseGR}, Ghost: ${d.ghostGR}, Diff: ${d.diff.toFixed(2)}`)
         .join(' | ');
 
-      const insight = await getForensicInsight('GHOST_SYNC', dataSummary);
+      // Also include top 5 anomalies for better forensic context
+      const topAnomalies = [...combinedData]
+        .sort((a, b) => b.diff - a.diff)
+        .slice(0, 5)
+        .map(d => `Depth: ${d.depth}, Diff: ${d.diff.toFixed(2)}`)
+        .join(' | ');
+
+      const statsSummary = `
+        STATISTICS:
+        - Total Points Analyzed: ${totalPoints}
+        - Valid Overlap Points: ${validCount} (${((validCount / (totalPoints || 1)) * 100).toFixed(1)}%)
+        - Depth Range: ${minDepth.toFixed(1)} to ${maxDepth.toFixed(1)} ${unitLabel}
+        - Average Deviation: ${avgDiff.toFixed(3)} API
+        - Standard Deviation: ${stdDev.toFixed(3)} API
+        - Maximum Deviation: ${maxDiff.toFixed(3)} API
+        - Points Above Threshold (${anomalyThreshold} API): ${pointsAboveThreshold} (${percentAboveThreshold.toFixed(1)}%)
+        - Forensic Integrity Score: ${integrityScore.toFixed(1)}%
+        
+        TOP ANOMALIES:
+        ${topAnomalies}
+        
+        DATA_SAMPLES:
+        ${sampledData}
+      `;
+
+      const insight = await getForensicInsight('GHOST_SYNC', statsSummary);
       setForensicInsight(insight || "ERROR: NO_INSIGHT_RETURNED");
-      logEvent('Forensic_Insight_Generation_Completed', 'INFO');
+      logEvent('Forensic_Insight_Generation_Completed', 'INFO', { integrityScore, avgDiff });
     } catch (error) {
       console.error("Failed to generate forensic insight:", error);
       setForensicInsight("CRITICAL_ERROR: INSIGHT_BUFFER_FAILURE");
@@ -915,7 +1096,7 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
       logEvent('Remote_Fetch_Failed', 'CRITICAL', { url: remoteUrl, error: error instanceof Error ? error.message : 'Unknown' });
     } finally {
       setIsFetching(false);
-      setShowFetchInput(false);
+      setShowIngressPanel(false);
       setRemoteUrl('');
     }
   };
@@ -932,7 +1113,12 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
       : 'text-[var(--emerald-primary)]';
 
   return (
-    <div className={`flex flex-col h-full p-4 space-y-4 font-terminal relative overflow-hidden transition-all duration-500 ${
+    <div 
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={`flex flex-col h-full p-4 space-y-4 font-terminal relative overflow-hidden transition-all duration-500 ${
       theme === 'CLEAN' ? 'bg-white text-slate-900 border border-slate-200 rounded-2xl shadow-sm' :
       theme === 'HIGH_CONTRAST' ? 'bg-white text-black border-2 border-black rounded-none' :
       'bg-[var(--card-bg)] border-[var(--panel-border)] scanline-effect glass-panel cyber-border'
@@ -961,9 +1147,9 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
 
         <div className="flex flex-wrap items-center gap-3">
           <button 
-            onClick={() => setShowFetchInput(!showFetchInput)}
+            onClick={() => { setShowIngressPanel(true); setActiveIngressTab('REMOTE'); }}
             className={`flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border glass-panel hover:scale-105 active:scale-95 ${
-              showFetchInput 
+              showIngressPanel && activeIngressTab === 'REMOTE'
                 ? theme === 'HIGH_CONTRAST' ? 'bg-black text-white border-black' : 'bg-cyan-500/20 border-cyan-500 text-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.3)]' 
                 : theme === 'HIGH_CONTRAST' ? 'bg-white text-black border-black hover:bg-black hover:text-white' : 'bg-slate-900/60 border-cyan-900/40 text-cyan-400 hover:border-cyan-400 hover:bg-cyan-500/5'
             }`}
@@ -974,10 +1160,10 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
 
           <div className="flex items-center gap-2">
             <button 
-              onClick={() => setShowUploadZone(!showUploadZone)}
+              onClick={() => { setShowIngressPanel(true); setActiveIngressTab('LOCAL'); }}
               disabled={isFetching}
               className={`flex items-center space-x-2 px-4 py-2 rounded text-[10px] font-black uppercase transition-all border glass-panel hover:scale-105 active:scale-95 ${
-                showUploadZone 
+                showIngressPanel && activeIngressTab === 'LOCAL'
                   ? theme === 'HIGH_CONTRAST' ? 'bg-black text-white border-black' : 'bg-purple-500/20 border-purple-500 text-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]' 
                   : theme === 'HIGH_CONTRAST' ? 'bg-white text-black border-black hover:bg-black hover:text-white' : 'bg-slate-900/60 border-purple-900/40 text-purple-400 hover:border-purple-400 hover:bg-purple-500/5'
               }`}
@@ -1158,109 +1344,192 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
         </div>
       </div>
 
-      {/* Remote Data Fetch Input Form */}
-      {showFetchInput && (
-        <div className="bg-slate-950/80 border border-cyan-500/30 p-4 rounded-lg animate-in slide-in-from-top-2 duration-300 shadow-2xl glass-panel cyber-border">
-          <form onSubmit={handleFetchSubmit} className="flex flex-col md:flex-row items-center gap-3">
-            <div className="flex-1 w-full relative">
-              <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-cyan-900">
-                <Link size={14} />
-              </div>
-              <input 
-                type="text" 
-                placeholder="Enter URL for .LAS or .CSV log file (e.g., https://archive.well/thistle.las)"
-                value={remoteUrl}
-                onChange={(e) => setRemoteUrl(e.target.value)}
-                autoFocus
-                className="w-full bg-slate-900 border border-cyan-900/40 rounded px-10 py-2 text-[10px] text-cyan-100 outline-none focus:border-cyan-500 transition-all font-terminal glass-panel"
-              />
-            </div>
-            <button 
-              type="submit" 
-              disabled={isFetching || !remoteUrl}
-              className="w-full md:w-auto px-6 py-2 bg-cyan-600 text-slate-950 rounded font-black text-[10px] uppercase tracking-widest hover:bg-cyan-500 disabled:opacity-50 flex items-center justify-center space-x-2 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] glass-panel"
-            >
-              {isFetching ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-              <span>{isFetching ? 'Injecting_Signal...' : 'Submit_Fetch'}</span>
-            </button>
-          </form>
-          <div className="mt-2 flex items-center space-x-3 text-[7px] text-cyan-800 uppercase font-black tracking-widest px-1">
-            <Info size={10} className="text-cyan-700" />
-            <span>Format Support: LAS 2.0/3.0, Tally CSV // Metadata Integrity Check Active</span>
-          </div>
-        </div>
-      )}
-
-      {/* Local File Upload Dropzone */}
-      {showUploadZone && (
-        <div 
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          className={`relative group bg-slate-950/80 border-2 border-dashed p-8 rounded-lg animate-in slide-in-from-top-2 duration-300 shadow-2xl glass-panel transition-all ${
-            isDragging ? 'border-purple-500 bg-purple-500/10 scale-[1.01]' : 'border-purple-900/40 hover:border-purple-500/50'
-          }`}
-        >
-          {fileError && (
-            <div className={`absolute top-4 left-4 right-12 p-3 rounded border flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300 z-10 ${
-              theme === 'HIGH_CONTRAST' ? 'bg-black text-white border-white' : 'bg-red-500/10 border-red-500/50 text-red-400'
-            }`}>
-              <div className="flex items-center space-x-3">
-                <AlertOctagon size={16} className="animate-pulse flex-shrink-0" />
-                <span className="text-[9px] font-black uppercase tracking-widest leading-tight">{fileError}</span>
-              </div>
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setFileError(null);
-                }}
-                className={`p-1 rounded-full transition-colors ${
-                  theme === 'HIGH_CONTRAST' ? 'hover:bg-white hover:text-black' : 'hover:bg-red-500/20'
-                }`}
-              >
-                <X size={14} />
-              </button>
-            </div>
-          )}
-
-          <div className="flex flex-col items-center justify-center space-y-4 pointer-events-none">
-            <div className={`p-4 rounded-full bg-slate-900 border ${isDragging ? 'border-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.4)]' : 'border-purple-900/40'}`}>
-              <Upload size={32} className={isDragging ? 'text-purple-400 animate-bounce' : 'text-purple-600'} />
-            </div>
-            <div className="text-center">
-              <p className="text-xs font-black text-purple-100 uppercase tracking-widest mb-1">
-                {isDragging ? 'Release_to_Ingest' : 'Drop_Forensic_Log_Here'}
-              </p>
-              <p className="text-[8px] font-mono text-purple-500/60 uppercase">
-                Accepted: .LAS, .CSV (Max 10MB)
-              </p>
-            </div>
+      {/* Ingress Panel (Slide-over) */}
+      <AnimatePresence>
+        {showIngressPanel && (
+          <>
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowIngressPanel(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200]"
+            />
             
-            <div className="flex items-center space-x-4 pt-2">
-              <div className="h-px w-8 bg-purple-900/30" />
-              <span className="text-[8px] font-black text-purple-900 uppercase tracking-tighter">OR</span>
-              <div className="h-px w-8 bg-purple-900/30" />
-            </div>
-
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                fileInputRef.current?.click();
-              }}
-              className="pointer-events-auto px-6 py-2 bg-purple-600/20 border border-purple-500/50 text-purple-400 rounded font-black text-[10px] uppercase tracking-widest hover:bg-purple-600 hover:text-white transition-all shadow-[0_0_15px_rgba(168,85,247,0.2)]"
+            {/* Panel */}
+            <motion.div 
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className={`fixed top-0 right-0 bottom-0 w-full max-w-md z-[210] shadow-2xl border-l flex flex-col ${
+                theme === 'CLEAN' ? 'bg-white border-slate-200' :
+                theme === 'HIGH_CONTRAST' ? 'bg-black border-white' :
+                'bg-[var(--slate-abyssal)] border-[var(--emerald-primary)]/20 glass-panel'
+              }`}
             >
-              Browse_Local_Buffer
-            </button>
-          </div>
+              <div className="p-6 border-b border-emerald-900/20 flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className={`p-2 rounded ${theme === 'HIGH_CONTRAST' ? 'bg-white text-black' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                    <Database size={20} />
+                  </div>
+                  <div>
+                    <h3 className={`text-lg font-black uppercase tracking-tighter ${theme === 'HIGH_CONTRAST' ? 'text-white' : 'text-emerald-400'}`}>Data_Ingress_Array</h3>
+                    <p className="text-[8px] font-black uppercase tracking-widest text-slate-500">Forensic_Signal_Injection</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowIngressPanel(false)}
+                  className={`p-2 rounded-full transition-colors ${theme === 'HIGH_CONTRAST' ? 'hover:bg-white hover:text-black' : 'hover:bg-slate-800 text-slate-400'}`}
+                >
+                  <X size={20} />
+                </button>
+              </div>
 
-          <button 
-            onClick={() => setShowUploadZone(false)}
-            className="absolute top-2 right-2 p-1 text-slate-600 hover:text-white transition-colors"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
+              <div className="flex border-b border-emerald-900/10">
+                <button 
+                  onClick={() => setActiveIngressTab('REMOTE')}
+                  className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 ${
+                    activeIngressTab === 'REMOTE' 
+                      ? 'border-cyan-500 text-cyan-400 bg-cyan-500/5' 
+                      : 'border-transparent text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  Remote_Fetch
+                </button>
+                <button 
+                  onClick={() => setActiveIngressTab('LOCAL')}
+                  className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 ${
+                    activeIngressTab === 'LOCAL' 
+                      ? 'border-purple-500 text-purple-400 bg-purple-500/5' 
+                      : 'border-transparent text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  Local_Ingest
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                {activeIngressTab === 'REMOTE' ? (
+                  <div className="space-y-6">
+                    <div className={`p-4 rounded-xl border ${theme === 'HIGH_CONTRAST' ? 'bg-black border-white' : 'bg-slate-900/40 border-cyan-500/20'}`}>
+                      <div className="flex items-center space-x-3 mb-4">
+                        <Globe2 size={16} className="text-cyan-400" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-white">Remote_Signal_URL</span>
+                      </div>
+                      <form onSubmit={handleFetchSubmit} className="space-y-4">
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-cyan-900">
+                            <Link size={14} />
+                          </div>
+                          <input 
+                            type="text" 
+                            placeholder="https://archive.well/thistle.las"
+                            value={remoteUrl}
+                            onChange={(e) => setRemoteUrl(e.target.value)}
+                            className="w-full bg-slate-950 border border-cyan-900/40 rounded px-10 py-3 text-[11px] text-cyan-100 outline-none focus:border-cyan-500 transition-all font-terminal"
+                          />
+                        </div>
+                        <button 
+                          type="submit" 
+                          disabled={isFetching || !remoteUrl}
+                          className="w-full py-3 bg-cyan-600 text-slate-950 rounded font-black text-[11px] uppercase tracking-[0.2em] hover:bg-cyan-500 disabled:opacity-50 flex items-center justify-center space-x-2 transition-all shadow-[0_0_20px_rgba(6,182,212,0.3)]"
+                        >
+                          {isFetching ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                          <span>{isFetching ? 'Injecting_Signal...' : 'Submit_Fetch'}</span>
+                        </button>
+                      </form>
+                      <div className="mt-4 flex items-start space-x-3 text-[8px] text-cyan-800 uppercase font-black tracking-widest leading-relaxed">
+                        <Info size={12} className="text-cyan-700 mt-0.5" />
+                        <span>Format Support: LAS 2.0/3.0, Tally CSV // Metadata Integrity Check Active</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div 
+                      className={`relative group bg-slate-950/80 border-2 border-dashed p-10 rounded-xl transition-all ${
+                        isDragging ? 'border-purple-500 bg-purple-500/20 scale-[1.02] ring-4 ring-purple-500/10' : 
+                        uploadStatus === 'SUCCESS' ? 'border-emerald-500 bg-emerald-500/5' :
+                        uploadStatus === 'FAILURE' ? 'border-red-500 bg-red-500/5' :
+                        'border-purple-900/40 hover:border-purple-500/50'
+                      }`}
+                      onDragEnter={handleDragEnter}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                    >
+                      <div className="flex flex-col items-center justify-center space-y-4 text-center">
+                        <div className={`p-4 rounded-full bg-slate-900 border ${isDragging ? 'border-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.4)]' : 'border-purple-900/40'}`}>
+                          <Upload size={32} className={isDragging ? 'text-purple-400 animate-bounce' : 'text-purple-600'} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-purple-100 uppercase tracking-widest mb-1">
+                            {isDragging ? 'Release_to_Ingest' : 'Drop_Forensic_Log_Here'}
+                          </p>
+                          <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">
+                            LAS 2.0/3.0 or CSV (MAX 10MB)
+                          </p>
+                        </div>
+                        <button 
+                          onClick={() => fileInputRef.current?.click()}
+                          className="px-4 py-2 bg-slate-900 border border-purple-500/30 rounded text-[9px] font-black uppercase tracking-widest text-purple-400 hover:bg-purple-500/10 transition-all"
+                        >
+                          Browse_Local_Buffer
+                        </button>
+                      </div>
+
+                      {uploadStatus !== 'IDLE' && (
+                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/95 rounded-xl backdrop-blur-md p-6">
+                          <div className="w-full space-y-4">
+                            <div className="flex items-center justify-between">
+                              <span className={`text-[10px] font-black uppercase tracking-widest ${
+                                uploadStatus === 'SUCCESS' ? 'text-emerald-400' :
+                                uploadStatus === 'FAILURE' ? 'text-red-400' :
+                                'text-purple-400'
+                              }`}>
+                                {uploadStatus === 'PENDING' ? 'Ingesting_Buffer...' :
+                                 uploadStatus === 'SUCCESS' ? 'Ingestion_Complete' :
+                                 'Ingestion_Failed'}
+                              </span>
+                              <span className="text-[10px] font-mono text-white/50">{Math.round(uploadProgress)}%</span>
+                            </div>
+                            
+                            <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden border border-white/5">
+                              <div 
+                                className={`h-full transition-all duration-300 ${
+                                  uploadStatus === 'SUCCESS' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' :
+                                  uploadStatus === 'FAILURE' ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]' :
+                                  'bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]'
+                                }`}
+                                style={{ width: `${uploadProgress}%` }}
+                              />
+                            </div>
+
+                            <div className="flex justify-center">
+                              {uploadStatus === 'PENDING' && <Loader2 size={24} className="text-purple-500 animate-spin" />}
+                              {uploadStatus === 'SUCCESS' && <CheckCircle2 size={24} className="text-emerald-500 animate-bounce" />}
+                              {uploadStatus === 'FAILURE' && <AlertTriangle size={24} className="text-red-500 animate-pulse" />}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-6 border-t border-emerald-900/20 bg-slate-950/50">
+                <div className="flex items-center space-x-3 text-[8px] font-black uppercase tracking-widest text-slate-500">
+                  <ShieldCheck size={12} className="text-emerald-500" />
+                  <span>Forensic_Integrity_Verification_Active</span>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {showLogs && (
         <SystemLogs 
@@ -1291,9 +1560,9 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
       <div className="flex-1 flex flex-col xl:flex-row gap-4 min-h-0">
         <div className="flex-1 flex flex-col min-h-0 space-y-4">
           {viewMode === 'SCHEMATIC' ? (
-            <WellBoreSchematic 
+            <WellboreSchematic 
               wellId={wellId || null} 
-              anomalies={detectedAnomalies} 
+              detectedAnomalies={detectedAnomalies} 
               casingIssues={casingIssues} 
             />
           ) : (
@@ -1345,10 +1614,10 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
               </div>
 
               <div className="relative">
-                <div className={`text-[11px] font-bold leading-relaxed font-terminal whitespace-pre-wrap pl-4 border-l-2 ${
+                <div className={`text-[11px] font-bold leading-relaxed font-terminal pl-4 border-l-2 markdown-body ${
                   theme === 'HIGH_CONTRAST' ? 'text-white border-white' : 'text-slate-200 border-indigo-500/30'
                 }`}>
-                  {forensicInsight}
+                  <ReactMarkdown>{forensicInsight}</ReactMarkdown>
                 </div>
                 
                 <div className={`absolute -left-1 top-0 bottom-0 w-0.5 bg-gradient-to-b from-indigo-500 via-indigo-500/20 to-transparent ${theme === 'HIGH_CONTRAST' ? 'hidden' : ''}`}></div>
@@ -1609,6 +1878,28 @@ const GhostSync: React.FC<GhostSyncProps> = ({ wellId }) => {
                   <>
                     <ScanLine size={12} />
                     <span>Run_Integrity_Scan</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={handleGetInsight}
+                disabled={isGeneratingInsight}
+                className={`w-full py-2.5 rounded text-[9px] font-black uppercase tracking-widest transition-all duration-300 flex items-center justify-center space-x-2 border ${
+                  isGeneratingInsight 
+                    ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-wait' 
+                    : 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/20 hover:border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                }`}
+              >
+                {isGeneratingInsight ? (
+                  <>
+                    <Loader2 size={12} className="animate-spin" />
+                    <span>Synthesizing_Insight...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={12} />
+                    <span>Get_Forensic_Insight</span>
                   </>
                 )}
               </button>

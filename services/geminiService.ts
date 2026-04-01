@@ -19,9 +19,15 @@ export async function getForensicInsight(module: string, dataSummary: string) {
       model: 'gemini-3-flash-preview',
       contents: `You are the Brahan Forensic Architect, a veteran offshore data specialist. 
       Analyze this ${module} data snapshot: ${dataSummary}.
-      Provide a concise, professional, cyber-forensic diagnosis. 
-      Identify potential 'Data Ghosts' or 'Mechanical Trauma'. 
-      Format as a short terminal log entry.`,
+      
+      Provide a detailed forensic diagnosis including:
+      1.  **Forensic Summary**: A concise overview of the data integrity.
+      2.  **Statistical Analysis**: Comment on the average deviation, standard deviation, and total points analyzed.
+      3.  **Integrity Score Interpretation**: Explain the forensic integrity score in the context of offshore standards.
+      4.  **Data Ghosts & Trauma**: Identify specific anomalies, potential mechanical trauma, or "ghost" signals.
+      5.  **Actionable Recommendations**: Provide clear, prioritized steps for remediation or further audit.
+      
+      Format the output as a professional, terminal-style forensic report. Use bold headings and clear bullet points.`,
       config: {
         temperature: 0.2,
         topP: 0.9,

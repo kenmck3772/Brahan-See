@@ -175,6 +175,7 @@ export interface CasingString {
   od: number;
   weight: string;
   grade: string;
+  status: 'NOMINAL' | 'CRITICAL' | 'WARNING';
 }
 
 export interface ForensicWell {

@@ -13,6 +13,8 @@ import { UnitProvider, useUnit } from './src/context/UnitContext';
 import { HarvesterProvider, useHarvester } from './src/context/HarvesterContext';
 import { TemporalProvider } from './src/context/TemporalContext';
 import { ThemeProvider, useTheme, ThemeType } from './src/context/ThemeContext';
+import { ContextAwareProvider, useContextAware } from './src/context/ContextAwareContext';
+import { Sparkles, HelpCircle } from 'lucide-react';
 
 const ThemeToggle: React.FC = () => {
   const { theme, setTheme } = useTheme();
@@ -129,6 +131,7 @@ const AppContent: React.FC = () => {
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lon: number; error?: string } | null>(null);
   const { theme } = useTheme();
+  const { workflow, suggestions, setActiveModules } = useContextAware();
   const [engagedModules, setEngagedModules] = useState<Record<string, boolean>>({
     missionControl: false,
     ghostSync: false,
@@ -139,7 +142,7 @@ const AppContent: React.FC = () => {
     legacyRecovery: false,
     norwaySovereign: false,
     chanonryProtocol: false,
-    protocolManual: false,
+    brahanBible: false,
     ndrModernization: false,
     cerberusSimulator: false,
     weteForensicScanner: false,
@@ -184,6 +187,20 @@ const AppContent: React.FC = () => {
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
+  useEffect(() => {
+    const active = Object.keys(engagedModules).filter(k => engagedModules[k]);
+    setActiveModules(active);
+  }, [engagedModules, setActiveModules]);
+
+  useEffect(() => {
+    const handleOpenModule = (e: any) => {
+      const moduleId = e.detail;
+      setEngagedModules(prev => ({ ...prev, [moduleId]: true }));
+    };
+    window.addEventListener('OPEN_MODULE', handleOpenModule);
+    return () => window.removeEventListener('OPEN_MODULE', handleOpenModule);
+  }, []);
+
   const toggleModule = (id: string) => {
     setEngagedModules(prev => ({ ...prev, [id]: !prev[id] }));
   };
@@ -198,7 +215,7 @@ const AppContent: React.FC = () => {
     { id: 'legacyRecovery', label: 'Legacy Recovery', icon: <Anchor size={16} />, desc: 'Offshore Pay Recovery' },
     { id: 'norwaySovereign', label: 'Norway Sovereign', icon: <Globe size={16} />, desc: 'NPD Factpages Uplink' },
     { id: 'chanonryProtocol', label: 'Chanonry Protocol', icon: <Beaker size={16} />, desc: 'Asphaltene Stability Logic' },
-    { id: 'protocolManual', label: 'Protocol Manual', icon: <BookOpen size={16} />, desc: 'Authorized Instructions' },
+    { id: 'brahanBible', label: 'Brahan Bible', icon: <BookOpen size={16} />, desc: 'The Sacred Manual of Forensic Truth' },
     { id: 'ndrModernization', label: 'NDR Modernization', icon: <Database size={16} />, desc: 'Forensic Modernization' },
     { id: 'cerberusSimulator', label: 'Cerberus Simulator', icon: <ShieldCheck size={16} />, desc: 'Tri-Head Survival Engine' },
     { id: 'weteForensicScanner', label: 'WETE Scanner', icon: <Scale size={16} />, desc: 'Fact Science Reconciliation' },
@@ -431,6 +448,33 @@ const AppContent: React.FC = () => {
         {/* Main Stage Grid */}
         <div className="flex-1 relative bg-[var(--slate-abyssal)] overflow-hidden scanline-effect">
           <div className="absolute inset-0 p-6 overflow-y-auto custom-scrollbar z-10">
+             {/* Contextual Suggestions Overlay */}
+             {suggestions.length > 0 && (
+               <div className="mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
+                 <div className="flex items-center space-x-2 mb-3">
+                   <Sparkles size={14} className="text-emerald-400 animate-pulse" />
+                   <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Contextual_Suggestions // {workflow}</span>
+                 </div>
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                   {suggestions.map((s) => (
+                     <button
+                       key={s.id}
+                       onClick={s.action}
+                       className="flex flex-col items-start p-4 bg-slate-900/80 border border-emerald-500/20 rounded-xl hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all group text-left"
+                     >
+                       <div className="flex items-center space-x-3 mb-2">
+                         <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-400 group-hover:scale-110 transition-transform">
+                           <HelpCircle size={16} />
+                         </div>
+                         <span className="text-[11px] font-black text-white uppercase tracking-tight">{s.label}</span>
+                       </div>
+                       <p className="text-[9px] text-slate-500 leading-relaxed uppercase font-terminal">{s.description}</p>
+                     </button>
+                   ))}
+                 </div>
+               </div>
+             )}
+
              <SovereignStage 
                engagedModules={engagedModules} 
                selectedTargetId={selectedTargetId}
@@ -656,7 +700,9 @@ const App: React.FC = () => {
       <HarvesterProvider>
         <TemporalProvider>
           <ThemeProvider>
-            <AppContent />
+            <ContextAwareProvider>
+              <AppContent />
+            </ContextAwareProvider>
           </ThemeProvider>
         </TemporalProvider>
       </HarvesterProvider>

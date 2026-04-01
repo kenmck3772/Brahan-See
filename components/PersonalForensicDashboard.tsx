@@ -24,6 +24,7 @@ import { useUnit } from '../src/context/UnitContext';
 import { useHarvester } from '../src/context/HarvesterContext';
 import { useTemporal } from '../src/context/TemporalContext';
 import { MOCK_WELLS } from '../constants';
+import { HarvesterService } from '../src/services/HarvesterService';
 import ForensicDeltaMap from './ForensicDeltaMap';
 import ForensicDeltaSummary from './ForensicDeltaSummary';
 import PublicFileXRay from './PublicFileXRay';
@@ -46,12 +47,28 @@ interface PublicDataEvent {
 const PersonalForensicDashboard: React.FC = () => {
   const { theme } = useTheme();
   const { unit, convertToDisplay, unitLabel } = useUnit();
-  const { ingressHistory, clearHistory } = useHarvester();
-  const { year } = useTemporal();
+  const { ingressHistory, clearHistory, sendIngress } = useHarvester();
+  const { year, quarter } = useTemporal();
   const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'MAP' | 'XRAY' | 'KNOWLEDGE' | 'FEED'>('OVERVIEW');
   const [selectedWellId, setSelectedWellId] = useState<string | null>(null);
   const [isPurging, setIsPurging] = useState(false);
+  const [isHarvesting, setIsHarvesting] = useState(false);
   const [blogCount, setBlogCount] = useState(2); // Initial count from ForensicBlog
+
+  const handleHarvest = async () => {
+    setIsHarvesting(true);
+    try {
+      const publicData = await HarvesterService.harvestNSTAData();
+      for (const well of publicData) {
+        const forensicData = HarvesterService.validateForensically(well);
+        await sendIngress(forensicData as any);
+      }
+    } catch (error) {
+      console.error('Harvesting failed:', error);
+    } finally {
+      setIsHarvesting(false);
+    }
+  };
 
   useEffect(() => {
     const handleBlogPublished = () => {
@@ -138,31 +155,45 @@ const PersonalForensicDashboard: React.FC = () => {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex px-6 bg-slate-900/30 border-b border-slate-800">
-        {[
-          { id: 'OVERVIEW', label: 'Overview', icon: LayoutDashboard },
-          { id: 'MAP', label: 'Conflict Map', icon: Globe },
-          { id: 'XRAY', label: 'File X-Ray', icon: Search },
-          { id: 'KNOWLEDGE', label: 'Knowledge Ark', icon: Share2 },
-          { id: 'FEED', label: 'Public Firehose', icon: Zap },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center space-x-2 px-6 py-4 text-[10px] font-black uppercase tracking-widest transition-all relative ${
-              activeTab === tab.id ? 'text-emerald-500' : 'text-slate-500 hover:text-slate-300'
-            }`}
+      <div className="flex px-6 bg-slate-900/30 border-b border-slate-800 items-center">
+        <div className="flex">
+          {[
+            { id: 'OVERVIEW', label: 'Overview', icon: LayoutDashboard },
+            { id: 'MAP', label: 'Conflict Map', icon: Globe },
+            { id: 'XRAY', label: 'File X-Ray', icon: Search },
+            { id: 'KNOWLEDGE', label: 'Knowledge Ark', icon: Share2 },
+            { id: 'FEED', label: 'Public Firehose', icon: Zap },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex items-center space-x-2 px-6 py-4 text-[10px] font-black uppercase tracking-widest transition-all relative ${
+                activeTab === tab.id ? 'text-emerald-500' : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              <tab.icon size={14} />
+              <span>{tab.label}</span>
+              {activeTab === tab.id && (
+                <motion.div 
+                  layoutId="activeTab"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+                />
+              )}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1"></div>
+        <div className="flex items-center space-x-4 pr-6">
+          <button 
+            onClick={handleHarvest}
+            disabled={isHarvesting}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase tracking-widest transition-all hover:bg-emerald-500/20 active:scale-95 disabled:opacity-50 ${isHarvesting ? 'animate-pulse' : ''}`}
           >
-            <tab.icon size={14} />
-            <span>{tab.label}</span>
-            {activeTab === tab.id && (
-              <motion.div 
-                layoutId="activeTab"
-                className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
-              />
-            )}
+            <Database size={14} className={isHarvesting ? 'animate-spin' : ''} />
+            <span>{isHarvesting ? 'Harvesting...' : 'Harvest_New_Data'}</span>
           </button>
-        ))}
+          <TimeTravelSlider />
+        </div>
       </div>
 
       {/* Dashboard Content */}

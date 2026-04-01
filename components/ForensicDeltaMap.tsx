@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Map as MapIcon, AlertTriangle, Crosshair, Target, Info, ShieldCheck, ArrowRightLeft, Compass, Activity, FileText, History, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Map as MapIcon, AlertTriangle, Crosshair, Target, Info, ShieldCheck, ArrowRightLeft, Compass, Activity, FileText, History, ChevronDown, ChevronUp, Database } from 'lucide-react';
 import ProvenanceTooltip from './ProvenanceTooltip';
 import { MOCK_WELLS } from '../constants';
 import { ForensicWell, TraumaEvent } from '../types';
 import { useUnit } from '../src/context/UnitContext';
+import { useHarvester } from '../src/context/HarvesterContext';
 
 interface ForensicDeltaMapProps {
   highlightedField?: string | null;
@@ -14,6 +15,7 @@ interface ForensicDeltaMapProps {
 
 const ForensicDeltaMap: React.FC<ForensicDeltaMapProps> = ({ highlightedField, userLocation, onSelectWell, selectedWellId: externalSelectedWellId }) => {
   const { unit, convertToDisplay, unitLabel } = useUnit();
+  const { ingressHistory } = useHarvester();
   const [internalSelectedWell, setInternalSelectedWell] = useState<string | null>(null);
   const [showOffsets, setShowOffsets] = useState(true);
   const [showProduction, setShowProduction] = useState(true);
@@ -22,6 +24,33 @@ const ForensicDeltaMap: React.FC<ForensicDeltaMapProps> = ({ highlightedField, u
   const [filteredLogs, setFilteredLogs] = useState<TraumaEvent[]>([]);
 
   const selectedWell = externalSelectedWellId || internalSelectedWell;
+
+  // Merge MOCK_WELLS with Harvester Ingress History
+  const allWells = useMemo(() => {
+    const harvestedWells: ForensicWell[] = ingressHistory.map(item => ({
+      id: item.uwi,
+      name: item.payload?.wellName || item.uwi,
+      field: item.payload?.field || 'Unknown',
+      reportedLat: item.payload?.reportedLat || 0,
+      reportedLon: item.payload?.reportedLon || 0,
+      actualLat: item.payload?.actualLat || 0,
+      actualLon: item.payload?.actualLon || 0,
+      reportedProd: item.payload?.reportedProd || 0,
+      auditedProd: item.payload?.auditedProd || 0,
+      status: item.payload?.conflicts?.length > 0 ? 'critical' : 'nominal',
+      deviationAudit: item.payload?.conflicts?.join(', ') || 'NOMINAL',
+      forensicNote: item.payload?.provenance || 'Harvested from NSTA',
+      lastAudit: new Date(item.timestamp).toLocaleDateString()
+    }));
+
+    // Combine and remove duplicates by ID
+    const combined = [...harvestedWells, ...MOCK_WELLS];
+    const unique = combined.filter((well, index, self) => 
+      index === self.findIndex((t) => t.id === well.id)
+    );
+    
+    return unique;
+  }, [ingressHistory]);
 
   useEffect(() => {
     if (!selectedWell) {
@@ -34,10 +63,9 @@ const ForensicDeltaMap: React.FC<ForensicDeltaMapProps> = ({ highlightedField, u
         const saved = localStorage.getItem('BRAHAN_BLACK_BOX_LOGS');
         if (saved) {
           const allLogs: TraumaEvent[] = JSON.parse(saved);
-          const well = MOCK_WELLS.find(w => w.id === selectedWell);
+          const well = allWells.find(w => w.id === selectedWell);
           
           // Filter logs relevant to this wellbore
-          // Heuristic: check if well ID or field name is in description
           const filtered = allLogs.filter(log => {
             const desc = log.description?.toLowerCase() || '';
             const wellId = selectedWell.toLowerCase();
@@ -55,7 +83,6 @@ const ForensicDeltaMap: React.FC<ForensicDeltaMapProps> = ({ highlightedField, u
 
     fetchLogs();
     
-    // Listen for storage changes to keep logs in sync
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'BRAHAN_BLACK_BOX_LOGS' || !e.key) {
         fetchLogs();
@@ -63,14 +90,13 @@ const ForensicDeltaMap: React.FC<ForensicDeltaMapProps> = ({ highlightedField, u
     };
     
     window.addEventListener('storage', handleStorage);
-    // Custom event for same-window updates
     window.addEventListener('BRAHAN_LOGS_UPDATED', fetchLogs);
     
     return () => {
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('BRAHAN_LOGS_UPDATED', fetchLogs);
     };
-  }, [selectedWell]);
+  }, [selectedWell, allWells]);
 
   const handleWellClick = (wellId: string) => {
     const isCurrentlySelected = selectedWell === wellId;
@@ -90,6 +116,10 @@ const ForensicDeltaMap: React.FC<ForensicDeltaMapProps> = ({ highlightedField, u
           <span className="text-[10px] font-black uppercase tracking-widest text-white">Forensic Geolocation Audit</span>
         </div>
         <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-1 mr-4">
+            <Database size={12} className="text-emerald-500" />
+            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Harvested: {ingressHistory.length}</span>
+          </div>
           <button 
             onClick={() => setShowOffsets(!showOffsets)}
             className={`flex items-center space-x-2 text-[8px] font-black px-3 py-1.5 rounded-lg border transition-all duration-300 ${
@@ -148,10 +178,10 @@ const ForensicDeltaMap: React.FC<ForensicDeltaMapProps> = ({ highlightedField, u
 
         {/* Well Markers */}
         <div className="absolute inset-0 p-8">
-          {MOCK_WELLS.map((well: ForensicWell, idx: number) => {
+          {allWells.map((well: ForensicWell, idx: number) => {
             // Simulation coordinates
-            const baseTop = 20 + (idx * 25);
-            const baseLeft = 30 + (idx * 20);
+            const baseTop = 20 + (idx * 15) % 60;
+            const baseLeft = 30 + (idx * 12) % 50;
             
             // Offset simulation (scaled for visibility)
             const offsetTop = (well.actualLat - well.reportedLat) * 1000;
@@ -295,11 +325,11 @@ const ForensicDeltaMap: React.FC<ForensicDeltaMapProps> = ({ highlightedField, u
           </div>
         </div>
       </div>
-
+      
       {/* Detail Panel */}
       {selectedWell && (
         <div className="absolute bottom-4 right-4 w-80 bg-slate-950/98 border border-slate-800 rounded-xl shadow-2xl backdrop-blur-xl animate-in slide-in-from-right-8 duration-300 z-30 overflow-hidden cyber-border">
-          {MOCK_WELLS.filter((w: ForensicWell) => w.id === selectedWell).map((well: ForensicWell) => {
+          {allWells.filter((w: ForensicWell) => w.id === selectedWell).map((well: ForensicWell) => {
             const latDiff = Math.abs(well.actualLat - well.reportedLat);
             const lonDiff = Math.abs(well.actualLon - well.reportedLon);
             const driftMeters = Math.sqrt(latDiff**2 + lonDiff**2) * 111320; // Rough conversion to meters
